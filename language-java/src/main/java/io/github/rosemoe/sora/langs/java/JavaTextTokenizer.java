@@ -1,7 +1,7 @@
 /*
  *    sora-editor - the awesome code editor for Android
- *    https://github.com/Rosemoe/CodeEditor
- *    Copyright (C) 2020-2021  Rosemoe
+ *    https://github.com/Rosemoe/sora-editor
+ *    Copyright (C) 2020-2022  Rosemoe
  *
  *     This library is free software; you can redistribute it and/or
  *     modify it under the terms of the GNU Lesser General Public
@@ -23,8 +23,8 @@
  */
 package io.github.rosemoe.sora.langs.java;
 
-import io.github.rosemoe.sora.langs.internal.MyCharacter;
-import io.github.rosemoe.sora.langs.internal.TrieTree;
+import io.github.rosemoe.sora.util.MyCharacter;
+import io.github.rosemoe.sora.util.TrieTree;
 
 /**
  * @author Rose

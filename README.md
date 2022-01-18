@@ -15,7 +15,7 @@ With good performance and nice features
 </div>
 
 ***Work In Progress*** This project is still developing slowly. Note that APIs are unstable.
-It is **not** recommended to use this project for production use.
+It is **not** recommended using this project for production use.
 Download the newest sources from [Releases](https://github.com/Rosemoe/CodeEditor/releases) instead of cloning this repository directly.
 **Issues and pull requests are welcome.**
 ## Features
@@ -33,34 +33,17 @@ Download the newest sources from [Releases](https://github.com/Rosemoe/CodeEdito
 - [ ] Code folding
 - [ ] Incremental highlight Analysis
 - [ ] Plugin System
-## Language Supported  
-* Java, JavaScript, C, C++, HTML, Python, PHP, CSS3 (Basic Support:highlight, code block line,identifier and keyword auto-completion). Code block line isn't available for HTML Language
-* [Textmate support](/textmate-core/README.md)
 ## Screenshots
 ![Wordwrap](/images/wordwrap.png)
 <img src="/images/curlylines.jpg" alt="ErrorIndicator" width="40%" align="bottom" />
-## How to use this editor  
-Add to your app's dependencies:
-```Gradle
-implementation 'io.github.Rosemoe.sora-editor:<moduleName>:<versionName>'
-```
-Available modules:     
-* editor 
-* language-base
-* language-java
-* language-html
-* language-python
-* language-css3
-* language-xml
-* language-universal
-* [language-textmate](/language-textmate/README.md)
-
-
-Detailed: [Get started](https://rosemoe.github.io/2021/08/22/editor-get-started/)
+## Use the editor
+The editor is currently refactoring. Please use old versions.    
+See branch [past-0.8.x](https://github.com/Rosemoe/sora-editor/tree/past-0.8.x) for more information about how to get started.   
 ## License
 ```
-CodeEditor - the awesome code editor for Android
-Copyright (C) 2020-2021  Rosemoe
+sora-editor - the awesome code editor for Android
+https://github.com/Rosemoe/sora-editor
+Copyright (C) 2020-2022  Rosemoe
 
 This library is free software; you can redistribute it and/or
 modify it under the terms of the GNU Lesser General Public

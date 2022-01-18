@@ -1,7 +1,7 @@
 /*
  *    sora-editor - the awesome code editor for Android
- *    https://github.com/Rosemoe/CodeEditor
- *    Copyright (C) 2020-2021  Rosemoe
+ *    https://github.com/Rosemoe/sora-editor
+ *    Copyright (C) 2020-2022  Rosemoe
  *
  *     This library is free software; you can redistribute it and/or
  *     modify it under the terms of the GNU Lesser General Public
@@ -47,17 +47,9 @@ import java.io.InputStreamReader;
 
 import io.github.rosemoe.sora.interfaces.EditorLanguage;
 import io.github.rosemoe.sora.langs.EmptyLanguage;
-import io.github.rosemoe.sora.langs.css3.CSS3Language;
-import io.github.rosemoe.sora.langs.desc.CDescription;
-import io.github.rosemoe.sora.langs.desc.CppDescription;
-import io.github.rosemoe.sora.langs.desc.JavaScriptDescription;
-import io.github.rosemoe.sora.langs.html.HTMLLanguage;
 import io.github.rosemoe.sora.langs.java.JavaLanguage;
-import io.github.rosemoe.sora.langs.python.PythonLanguage;
-import io.github.rosemoe.sora.langs.textmate.theme.TextMateColorScheme;
 import io.github.rosemoe.sora.langs.textmate.TextMateLanguage;
-import io.github.rosemoe.sora.langs.universal.UniversalLanguage;
-import io.github.rosemoe.sora.langs.xml.XMLLanguage;
+import io.github.rosemoe.sora.langs.textmate.theme.TextMateColorScheme;
 import io.github.rosemoe.sora.textmate.core.internal.theme.reader.ThemeReader;
 import io.github.rosemoe.sora.textmate.core.theme.IRawTheme;
 import io.github.rosemoe.sora.utils.CrashHandler;
@@ -111,8 +103,6 @@ public class MainActivity extends AppCompatActivity {
         });
         editor.setTypefaceText(Typeface.createFromAsset(getAssets(), "JetBrainsMono-Regular.ttf"));
         editor.setEditorLanguage(new JavaLanguage());
-        // The font we use does not have the issue
-        editor.setLigatureEnabled(true);
         editor.setNonPrintablePaintingFlags(CodeEditor.FLAG_DRAW_WHITESPACE_LEADING | CodeEditor.FLAG_DRAW_LINE_SEPARATOR | CodeEditor.FLAG_DRAW_WHITESPACE_IN_SELECTION);
         new Thread(() -> {
             try {
@@ -206,36 +196,12 @@ public class MainActivity extends AppCompatActivity {
         } else if (id == R.id.switch_language) {
             new AlertDialog.Builder(this)
                     .setTitle(R.string.switch_language)
-                    .setSingleChoiceItems(new String[]{"C", "C++", "Java", "JavaScript", "HTML", "Python", "CSS3", "Xml", "TextMate Java", "TextMate Kotlin", "TM Language from file", "None"}, -1, (dialog, which) -> {
+                    .setSingleChoiceItems(new String[]{"Java", "TextMate Java", "TextMate Kotlin", "TM Language from file", "None"}, -1, (dialog, which) -> {
                         switch (which) {
                             case 0:
-                                editor.setEditorLanguage(new UniversalLanguage(new CDescription()));
-                                break;
-                            case 1:
-                                editor.setEditorLanguage(new UniversalLanguage(new CppDescription()));
-                                break;
-                            case 2:
                                 editor.setEditorLanguage(new JavaLanguage());
                                 break;
-                            case 3:
-                                editor.setEditorLanguage(new UniversalLanguage(new JavaScriptDescription()));
-                                break;
-                            case 4:
-                                editor.setEditorLanguage(new HTMLLanguage());
-                                editor.setColorScheme(new HTMLScheme());
-                                break;
-                            case 5:
-                                editor.setEditorLanguage(new PythonLanguage());
-                                break;
-                            case 6:
-                                editor.setEditorLanguage(new CSS3Language());
-                                break;
-                            case 7:
-                                XMLLanguage xmlLanguage=new XMLLanguage();
-                                xmlLanguage.setSyntaxCheckEnable(true);
-                                editor.setEditorLanguage(xmlLanguage);
-                                break;
-                            case 8:
+                            case 1:
 
                                 try {
                                     //TextMateLanguage only support TextMateColorScheme
@@ -260,7 +226,7 @@ public class MainActivity extends AppCompatActivity {
                                 }
 
                                 break;
-                            case 9:
+                            case 2:
 
                                 try {
                                     //TextMateLanguage only support TextMateColorScheme
@@ -285,7 +251,7 @@ public class MainActivity extends AppCompatActivity {
                                 }
 
                                 break;
-                            case 10:
+                            case 3:
                                 loadTMLLauncher.launch("*/*");
                                 break;
                             default:

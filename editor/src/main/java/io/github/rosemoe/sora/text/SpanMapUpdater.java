@@ -1,7 +1,7 @@
 /*
  *    sora-editor - the awesome code editor for Android
- *    https://github.com/Rosemoe/CodeEditor
- *    Copyright (C) 2020-2021  Rosemoe
+ *    https://github.com/Rosemoe/sora-editor
+ *    Copyright (C) 2020-2022  Rosemoe
  *
  *     This library is free software; you can redistribute it and/or
  *     modify it under the terms of the GNU Lesser General Public
@@ -130,7 +130,7 @@ public class SpanMapUpdater {
         // Add extra span for line start
         if (originIndex == 0) {
             Span first = spanList.get(0);
-            if (first.colorId == EditorColorScheme.TEXT_NORMAL && first.underlineColor == 0) {
+            if (first.style == EditorColorScheme.TEXT_NORMAL && first.underlineColor == 0) {
                 first.column = 0;
             } else {
                 spanList.add(0, Span.obtain(0, EditorColorScheme.TEXT_NORMAL));

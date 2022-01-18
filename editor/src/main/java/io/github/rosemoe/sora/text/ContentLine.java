@@ -1,7 +1,7 @@
 /*
  *    sora-editor - the awesome code editor for Android
- *    https://github.com/Rosemoe/CodeEditor
- *    Copyright (C) 2020-2021  Rosemoe
+ *    https://github.com/Rosemoe/sora-editor
+ *    Copyright (C) 2020-2022  Rosemoe
  *
  *     This library is free software; you can redistribute it and/or
  *     modify it under the terms of the GNU Lesser General Public
@@ -28,9 +28,12 @@ import android.text.TextUtils;
 
 import androidx.annotation.NonNull;
 
+import io.github.rosemoe.sora.annotations.UnsupportedUserUsage;
+
 public class ContentLine implements CharSequence, GetChars {
 
-    private char[] value;
+    @UnsupportedUserUsage
+    public char[] value;
 
     private int length;
 
@@ -43,6 +46,13 @@ public class ContentLine implements CharSequence, GetChars {
      * Measured width of line
      */
     private int width;
+
+    /**
+     * Width of each character inside
+     */
+    @UnsupportedUserUsage
+    public float[] widthCache;
+    public long timestamp;
 
     public ContentLine() {
         this(true);

@@ -1,7 +1,7 @@
 /*
  *    sora-editor - the awesome code editor for Android
- *    https://github.com/Rosemoe/CodeEditor
- *    Copyright (C) 2020-2021  Rosemoe
+ *    https://github.com/Rosemoe/sora-editor
+ *    Copyright (C) 2020-2022  Rosemoe
  *
  *     This library is free software; you can redistribute it and/or
  *     modify it under the terms of the GNU Lesser General Public
@@ -23,6 +23,8 @@
  */
 package io.github.rosemoe.sora.langs.java;
 
+import static io.github.rosemoe.sora.text.TextStyle.makeStyle;
+
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Stack;
@@ -32,7 +34,8 @@ import io.github.rosemoe.sora.data.NavigationItem;
 import io.github.rosemoe.sora.data.Span;
 import io.github.rosemoe.sora.interfaces.CodeAnalyzer;
 import io.github.rosemoe.sora.langs.IdentifierAutoComplete;
-import io.github.rosemoe.sora.langs.internal.TrieTree;
+import io.github.rosemoe.sora.text.TextStyle;
+import io.github.rosemoe.sora.util.TrieTree;
 import io.github.rosemoe.sora.text.LineNumberCalculator;
 import io.github.rosemoe.sora.text.TextAnalyzeResult;
 import io.github.rosemoe.sora.text.TextAnalyzer;
@@ -129,7 +132,7 @@ public class JavaCodeAnalyzer implements CodeAnalyzer {
                         classNamePrevious = false;
                         break;
                     }
-                    result.addIfNeeded(line, column, EditorColorScheme.TEXT_NORMAL);
+                    result.addIfNeeded(line, column,EditorColorScheme.TEXT_NORMAL);
                     break;
                 case CHARACTER_LITERAL:
                 case STRING:
@@ -148,7 +151,7 @@ public class JavaCodeAnalyzer implements CodeAnalyzer {
                 case SHORT:
                 case VOID:
                     classNamePrevious = true;
-                    result.addIfNeeded(line, column, EditorColorScheme.KEYWORD);
+                    result.addIfNeeded(line, column, makeStyle(EditorColorScheme.KEYWORD, 0, true, false, false));
                     break;
                 case ABSTRACT:
                 case ASSERT:
@@ -195,7 +198,7 @@ public class JavaCodeAnalyzer implements CodeAnalyzer {
                 case FALSE:
                 case NULL:
                     classNamePrevious = false;
-                    result.addIfNeeded(line, column, EditorColorScheme.KEYWORD, Span.STYLE_BOLD);
+                    result.addIfNeeded(line, column, makeStyle(EditorColorScheme.KEYWORD, 0, true, false, false));
                     break;
                 case LBRACE: {
                     classNamePrevious = false;
