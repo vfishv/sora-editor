@@ -28,7 +28,6 @@ import android.graphics.Typeface;
 import android.os.Build;
 
 import io.github.rosemoe.sora.text.ContentLine;
-import io.github.rosemoe.sora.util.TemporaryCharBuffer;
 
 public class Paint extends android.graphics.Paint {
 
@@ -74,19 +73,6 @@ public class Paint extends android.graphics.Paint {
         } else {
             // Hidden, but we can call it directly on Android 21 - 22
             return getTextRunAdvances(text, start, end - start, contextStart, contextEnd - contextStart, false, null, 0);
-        }
-    }
-
-    @SuppressLint("NewApi")
-    public float measureTextRunAdvance(CharSequence text, int start, int end, int contextStart, int contextEnd) {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-            return getRunAdvance(text, start, end, contextStart, contextEnd, false, end);
-        } else {
-            var buffer = TemporaryCharBuffer.obtain(contextEnd - contextStart);
-            // Hidden, but we can call it directly on Android 21 - 22
-            float result = getTextRunAdvances(buffer, start - contextStart, end - start, 0, contextEnd - contextStart, false, null, 0);
-            TemporaryCharBuffer.recycle(buffer);
-            return result;
         }
     }
 

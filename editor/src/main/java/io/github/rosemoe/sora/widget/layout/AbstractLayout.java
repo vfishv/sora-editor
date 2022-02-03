@@ -25,8 +25,8 @@ package io.github.rosemoe.sora.widget.layout;
 
 import java.util.List;
 
-import io.github.rosemoe.sora.data.Span;
 import io.github.rosemoe.sora.graphics.GraphicTextRow;
+import io.github.rosemoe.sora.lang.styling.Span;
 import io.github.rosemoe.sora.text.Content;
 import io.github.rosemoe.sora.text.ContentLine;
 import io.github.rosemoe.sora.widget.CodeEditor;
@@ -45,7 +45,6 @@ public abstract class AbstractLayout implements Layout {
     public AbstractLayout(CodeEditor editor, Content text) {
         this.editor = editor;
         this.text = text;
-        updateMeasureCaches(0, text == null ? 0 : text.getLineCount());
     }
 
     protected List<Span> getSpans(int line) {
@@ -64,49 +63,15 @@ public abstract class AbstractLayout implements Layout {
        return orderedFindCharIndex(targetOffset, str, line, 0, str.length());
     }
 
-    @Override
-    public void updateMeasureCaches(int startLine, int endLine, long timestamp) {
-        if (text == null) {
-            return;
-        }
-        if (text.getLineCount() > 10000) {
-            // Disable the cache if text is too large
-            while (startLine <= endLine && startLine < text.getLineCount()) {
-                text.getLine(startLine).widthCache = null;
-                startLine++;
-            }
-        } else {
-            while (startLine <= endLine && startLine < text.getLineCount()) {
-                ContentLine line = text.getLine(startLine);
-                // Do not create cache for long lines
-                if (line.length() <= 128) {
-                    if (line.timestamp < timestamp) {
-                        var gtr = GraphicTextRow.obtain();
-                        gtr.set(line, 0, line.length(), editor.getTabWidth(), getSpans(startLine), editor.getTextPaint());
-                        gtr.buildMeasureCache();
-                        GraphicTextRow.recycle(gtr);
-                        line.timestamp = timestamp;
-                    }
-                } else {
-                    line.widthCache = null;
-                }
-                startLine++;
-            }
-        }
-    }
-
-    public void updateMeasureCaches(int line1, int line2) {
-        updateMeasureCaches(line1, line2, System.nanoTime());
-    }
 
     @Override
     public void afterDelete(Content content, int startLine, int startColumn, int endLine, int endColumn, CharSequence deletedContent) {
-        updateMeasureCaches(startLine, startLine + 1);
+
     }
 
     @Override
     public void afterInsert(Content content, int startLine, int startColumn, int endLine, int endColumn, CharSequence insertedContent) {
-        updateMeasureCaches(startLine, endLine);
+
     }
 
     @Override

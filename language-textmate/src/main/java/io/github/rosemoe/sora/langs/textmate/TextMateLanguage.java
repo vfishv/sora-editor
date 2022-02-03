@@ -27,8 +27,8 @@ import java.io.InputStream;
 import java.io.Reader;
 
 import io.github.rosemoe.sora.annotations.Experimental;
-import io.github.rosemoe.sora.interfaces.CodeAnalyzer;
-import io.github.rosemoe.sora.langs.EmptyLanguage;
+import io.github.rosemoe.sora.lang.EmptyLanguage;
+import io.github.rosemoe.sora.lang.analysis.AnalyzeManager;
 import io.github.rosemoe.sora.langs.textmate.analyzer.TextMateAnalyzer;
 import io.github.rosemoe.sora.langs.textmate.theme.TextMateColorScheme;
 import io.github.rosemoe.sora.textmate.core.theme.IRawTheme;
@@ -43,8 +43,6 @@ public class TextMateLanguage extends EmptyLanguage {
         } catch (Exception e) {
             e.printStackTrace();
         }
-
-
     }
 
     public static TextMateLanguage create(String grammarName, InputStream grammarIns,Reader languageConfiguration, IRawTheme theme) {
@@ -67,20 +65,19 @@ public class TextMateLanguage extends EmptyLanguage {
     }
 
     @Override
-    public CodeAnalyzer getAnalyzer() {
+    public AnalyzeManager getAnalyzeManager() {
         if (textMateAnalyzer != null) {
             return textMateAnalyzer;
         }
-        return super.getAnalyzer();
+        return EmptyAnalyzeManager.INSTANCE;
     }
 
-    private int tabSize=4;
-
-    public void setTabSize(int tabSize) {
-        this.tabSize = tabSize;
+    @Override
+    public void destroy() {
+        super.destroy();
     }
 
     public int getTabSize() {
-        return tabSize;
+        return 4;
     }
 }

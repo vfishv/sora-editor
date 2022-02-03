@@ -12,9 +12,15 @@
         <entry key="..\:/Users/20734/AndroidStudioProjects/CodeEditor/editor/src/main/res/layout/text_compose_panel.xml" value="0.10729166666666666" />
         <entry key="..\:/Users/20734/AndroidStudioProjects/sora-editor/editor/src/main/res/drawable/ic_more_vert_black_20dp.xml" value="0.191" />
         <entry key="..\:/Users/20734/AndroidStudioProjects/sora-editor/editor/src/main/res/drawable/ic_sora_handle_drop.xml" value="0.174" />
+        <entry key="..\:/Users/20734/AndroidStudioProjects/sora-editor/editor/src/main/res/layout/text_compose_panel.xml" value="0.1" />
+        <entry key="..\:/Users/20734/AndroidStudioProjects/sora-editor/editor/src/main/res/layout/text_compose_popup_window.xml" value="0.1" />
       </map>
     </option>
   </component>
   <component name="ExternalStorageConfigurationManager" enabled="true" />
-  <component name="ProjectRootManager" version="2" languageLevel="JDK_16_PREVIEW" project-jdk-name="11" project-jdk-type="JavaSDK" />
+  <component name="JavadocGenerationManager">
+    <option name="OUTPUT_DIRECTORY" value="D:/Javadoc" />
+    <option name="OPTION_INCLUDE_LIBS" value="true" />
+  </component>
+  <component name="ProjectRootManager" version="2" languageLevel="JDK_16" project-jdk-name="11" project-jdk-type="JavaSDK" />
 </project>

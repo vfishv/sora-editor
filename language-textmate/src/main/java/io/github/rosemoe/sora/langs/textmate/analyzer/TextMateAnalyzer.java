@@ -27,14 +27,15 @@ import android.graphics.Color;
 
 import java.io.InputStream;
 import java.io.Reader;
+import java.util.List;
 
-import io.github.rosemoe.sora.data.Span;
-import io.github.rosemoe.sora.interfaces.CodeAnalyzer;
+import io.github.rosemoe.sora.lang.analysis.AsyncIncrementalAnalyzeManager;
+import io.github.rosemoe.sora.lang.analysis.UIThreadIncrementalAnalyzeManager;
+import io.github.rosemoe.sora.lang.styling.CodeBlock;
+import io.github.rosemoe.sora.lang.styling.Span;
+import io.github.rosemoe.sora.lang.styling.TextStyle;
 import io.github.rosemoe.sora.langs.textmate.TextMateLanguage;
 import io.github.rosemoe.sora.text.Content;
-import io.github.rosemoe.sora.text.TextAnalyzeResult;
-import io.github.rosemoe.sora.text.TextAnalyzer;
-import io.github.rosemoe.sora.text.TextStyle;
 import io.github.rosemoe.sora.textmate.core.grammar.IGrammar;
 import io.github.rosemoe.sora.textmate.core.grammar.ITokenizeLineResult2;
 import io.github.rosemoe.sora.textmate.core.grammar.StackElement;
@@ -44,9 +45,10 @@ import io.github.rosemoe.sora.textmate.core.theme.FontStyle;
 import io.github.rosemoe.sora.textmate.core.theme.IRawTheme;
 import io.github.rosemoe.sora.textmate.core.theme.Theme;
 import io.github.rosemoe.sora.textmate.languageconfiguration.internal.LanguageConfigurator;
-import io.github.rosemoe.sora.widget.EditorColorScheme;
+import io.github.rosemoe.sora.util.ArrayList;
+import io.github.rosemoe.sora.widget.schemes.EditorColorScheme;
 
-public class TextMateAnalyzer implements CodeAnalyzer {
+public class TextMateAnalyzer extends AsyncIncrementalAnalyzeManager<StackElement, Span> {
 
     private final Registry registry = new Registry();
     private final IGrammar grammar;
@@ -66,54 +68,59 @@ public class TextMateAnalyzer implements CodeAnalyzer {
     }
 
     @Override
-    public void analyze(CharSequence content, TextAnalyzeResult result, TextAnalyzer.AnalyzeThread.Delegate delegate) {
-        Content model = new Content(content);
+    public StackElement getInitialState() {
+        return null;
+    }
 
-        try {
-            boolean first = true;
-            StackElement ruleStack = null;
-            for (int lineCount = 0; lineCount < model.getLineCount() && delegate.shouldAnalyze(); lineCount++) {
-                String line = model.getLineString(lineCount) + "\n";
-                if (first) {
-                    result.addNormalIfNull();
-                    first = false;
-                }
-                ITokenizeLineResult2 lineTokens = grammar.tokenizeLine2(line, ruleStack);
-                int tokensLength = lineTokens.getTokens().length / 2;
-                for (int i = 0; i < tokensLength; i++) {
-                    int startIndex = lineTokens.getTokens()[2 * i];
-                    int nextStartIndex = i + 1 < tokensLength ? lineTokens.getTokens()[2 * i + 2] : line.length();
-                    String tokenText = line.substring(startIndex, nextStartIndex);
-                    if (tokenText.trim().isEmpty()) {
-                        continue;
-                    }
-                    int metadata = lineTokens.getTokens()[2 * i + 1];
-                    int foreground = StackElementMetadata.getForeground(metadata);
-                    int fontStyle = StackElementMetadata.getFontStyle(metadata);
-                    Span span = Span.obtain(startIndex, TextStyle.makeStyle(foreground + 255, 0, (fontStyle & FontStyle.Bold) != 0, (fontStyle & FontStyle.Italic) != 0, false));
-
-                    if ((fontStyle & FontStyle.Underline) != 0) {
-                        String color = theme.getColor(foreground);
-                        if (color != null) {
-                            span.underlineColor = Color.parseColor(color);
-                        }
-                    }
-
-                    result.add(lineCount, span);
-                    //Erase the extra style at the end of the span
-                    result.addIfNeeded(lineCount, nextStartIndex, EditorColorScheme.TEXT_NORMAL);
-                }
-                ruleStack = lineTokens.getRuleStack();
-            }
-
-            if (blockLineAnalyzer != null) {
-                blockLineAnalyzer.analyze(language, model, result);
-            }
-
-            result.determine(model.getLineCount());
-        } catch (Exception e) {
-            e.printStackTrace();
+    @Override
+    public boolean stateEquals(StackElement state, StackElement another) {
+        if (state == null && another == null) {
+            return true;
         }
+        if (state != null && another != null) {
+            return state.equals(another);
+        }
+        return false;
+    }
+
+    @Override
+    public List<CodeBlock> computeBlocks(Content text) {
+        var list = new java.util.ArrayList<CodeBlock>();
+        blockLineAnalyzer.analyze(language, text, list);
+        return list;
+    }
+
+    @Override
+    public LineTokenizeResult<StackElement, Span> tokenizeLine(CharSequence lineC, StackElement state) {
+        String line = lineC.toString();
+        var tokens = new ArrayList<Span>();
+        ITokenizeLineResult2 lineTokens = grammar.tokenizeLine2(line, state);
+        int tokensLength = lineTokens.getTokens().length / 2;
+        for (int i = 0; i < tokensLength; i++) {
+            int startIndex = lineTokens.getTokens()[2 * i];
+            if (i == 0 && startIndex != 0) {
+                tokens.add(Span.obtain(0, EditorColorScheme.TEXT_NORMAL));
+            }
+            int metadata = lineTokens.getTokens()[2 * i + 1];
+            int foreground = StackElementMetadata.getForeground(metadata);
+            int fontStyle = StackElementMetadata.getFontStyle(metadata);
+            Span span = Span.obtain(startIndex, TextStyle.makeStyle(foreground + 255, 0, (fontStyle & FontStyle.Bold) != 0, (fontStyle & FontStyle.Italic) != 0, false));
+
+            if ((fontStyle & FontStyle.Underline) != 0) {
+                String color = theme.getColor(foreground);
+                if (color != null) {
+                    span.underlineColor = Color.parseColor(color);
+                }
+            }
+
+            tokens.add(span);
+        }
+        return new LineTokenizeResult<>(lineTokens.getRuleStack(), null, tokens);
+    }
+
+    @Override
+    public List<Span> generateSpansForLine(LineTokenizeResult<StackElement, Span> tokens) {
+        return null;
     }
 
     public void updateTheme(IRawTheme theme) {

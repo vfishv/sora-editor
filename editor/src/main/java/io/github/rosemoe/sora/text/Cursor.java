@@ -23,14 +23,12 @@
  */
 package io.github.rosemoe.sora.text;
 
-import android.util.Log;
-
-import io.github.rosemoe.sora.interfaces.EditorLanguage;
 import io.github.rosemoe.sora.util.IntPair;
 
 /**
- * @author Rose
- * Warning:The cursor position will update automatically when the content has been changed by other way
+ * The cursor position will update automatically when the content has been changed by other ways.
+ *
+ * @author Rosemoe
  */
 public final class Cursor {
 
@@ -38,9 +36,6 @@ public final class Cursor {
     private final CachedIndexer mIndexer;
     private CharPosition mLeft, mRight;
     private CharPosition cache0, cache1, cache2;
-    private boolean mAutoIndentEnabled;
-    private EditorLanguage mLanguage;
-    private int mTabWidth;
 
     /**
      * Create a new Cursor for Content
@@ -52,7 +47,6 @@ public final class Cursor {
         mIndexer = new CachedIndexer(content);
         mLeft = new CharPosition().zero();
         mRight = new CharPosition().zero();
-        mTabWidth = 4;
     }
 
     /**
@@ -61,7 +55,7 @@ public final class Cursor {
      * @param c Character to check
      * @return Result whether a space char
      */
-    protected static boolean isWhitespace(char c) {
+    private static boolean isWhitespace(char c) {
         return (c == '\t' || c == ' ');
     }
 
@@ -203,104 +197,6 @@ public final class Cursor {
     }
 
     /**
-     * Returns whether auto indent is enabled
-     *
-     * @return Enabled or disabled
-     */
-    public boolean isAutoIndent() {
-        return mAutoIndentEnabled;
-    }
-
-    /**
-     * Enable or disable auto indent when insert text through Cursor
-     *
-     * @param enabled Auto Indent state
-     */
-    public void setAutoIndent(boolean enabled) {
-        mAutoIndentEnabled = enabled;
-    }
-
-    /**
-     * Set language for auto indent
-     *
-     * @param lang The target language
-     */
-    public void setLanguage(EditorLanguage lang) {
-        mLanguage = lang;
-    }
-
-    /**
-     * Set tab width for auto indent
-     *
-     * @param width tab width
-     */
-    public void setTabWidth(int width) {
-        mTabWidth = width;
-    }
-
-    public void onCommitText(CharSequence text) {
-        onCommitText(text, true);
-    }
-
-    /**
-     * Commit text at current state
-     *
-     * @param text Text commit by InputConnection
-     */
-    public void onCommitText(CharSequence text, boolean applyAutoIndent) {
-        if (isSelected()) {
-            mContent.replace(getLeftLine(), getLeftColumn(), getRightLine(), getRightColumn(), text);
-        } else {
-            if (mAutoIndentEnabled && text.length() != 0 && applyAutoIndent) {
-                char first = text.charAt(0);
-                if (first == '\n') {
-                    String line = mContent.getLineString(getLeftLine());
-                    int p = 0, count = 0;
-                    while (p < getLeftColumn()) {
-                        if (isWhitespace(line.charAt(p))) {
-                            if (line.charAt(p) == '\t') {
-                                count += mTabWidth;
-                            } else {
-                                count++;
-                            }
-                            p++;
-                        } else {
-                            break;
-                        }
-                    }
-                    String sub = line.substring(0, getLeftColumn());
-                    try {
-                        count += mLanguage.getIndentAdvance(sub);
-                    } catch (Exception e) {
-                        Log.w("EditorCursor", "Language object error", e);
-                    }
-                    StringBuilder sb = new StringBuilder(text);
-                    sb.insert(1, TextUtils.createIndent(count, mTabWidth, mLanguage.useTab()));
-                    text = sb;
-                }
-            }
-            mContent.insert(getLeftLine(), getLeftColumn(), text);
-        }
-    }
-
-    /**
-     * Handle delete submit by InputConnection
-     */
-    public void onDeleteKeyPressed() {
-        if (isSelected()) {
-            mContent.delete(getLeftLine(), getLeftColumn(), getRightLine(), getRightColumn());
-        } else {
-            int col = getLeftColumn(), len = 1;
-            // Do not put cursor inside a emotion character
-            if (col > 1) {
-                int left = TextLayoutHelper.get().getCurPosLeft(col, mContent.getLine(getLeftLine()));
-                len = col - left;
-            }
-            mContent.delete(getLeftLine(), getLeftColumn() - len, getLeftLine(), getLeftColumn());
-        }
-    }
-
-    /**
      * Get position after moving left once
      * @param position A packed pair (line, column) describing the original position
      * @return A packed pair (line, column) describing the result position
@@ -308,16 +204,16 @@ public final class Cursor {
     public long getLeftOf(long position) {
         int line = IntPair.getFirst(position);
         int column = IntPair.getSecond(position);
-        if (column - 1 >= 0) {
-            column = TextLayoutHelper.get().getCurPosLeft(column, mContent.getLine(line));
-            return IntPair.pack(line, column);
-        } else {
+        int n_column = TextLayoutHelper.get().getCurPosLeft(column, mContent.getLine(line));
+        if (n_column == column && column == 0) {
             if (line == 0) {
                 return 0;
             } else {
                 int c_column = mContent.getColumnCount(line - 1);
                 return IntPair.pack(line - 1, c_column);
             }
+        } else {
+            return IntPair.pack(line, n_column);
         }
     }
 
@@ -330,16 +226,15 @@ public final class Cursor {
         int line = IntPair.getFirst(position);
         int column = IntPair.getSecond(position);
         int c_column = mContent.getColumnCount(line);
-
-        if (column + 1 <= c_column) {
-            column = TextLayoutHelper.get().getCurPosRight(column, mContent.getLine(line));
-           return IntPair.pack(line, column);
-        } else {
+        int n_column = TextLayoutHelper.get().getCurPosRight(column, mContent.getLine(line));
+        if (n_column == c_column && column == n_column) {
             if (line + 1 == mContent.getLineCount()) {
                 return IntPair.pack(line, c_column);
             } else {
                 return IntPair.pack(line + 1, 0);
             }
+        } else {
+            return IntPair.pack(line, n_column);
         }
     }
 

@@ -23,27 +23,37 @@
  */
 package io.github.rosemoe.sora.widget;
 
+import io.github.rosemoe.sora.event.EventReceiver;
+import io.github.rosemoe.sora.event.SelectionChangeEvent;
+import io.github.rosemoe.sora.event.Unsubscribe;
+
 /**
  * This class is used to control cursor visibility
  *
  * @author Rose
  */
-final class CursorBlink implements Runnable {
+final class CursorBlink implements Runnable, EventReceiver<SelectionChangeEvent> {
 
     final CodeEditor editor;
     long lastSelectionModificationTime = 0;
     int period;
-    boolean visibility;
-    boolean valid;
+    public boolean visibility;
+    public boolean valid;
     private float[] buffer;
 
-    CursorBlink(CodeEditor editor, int period) {
+    public CursorBlink(CodeEditor editor, int period) {
         visibility = true;
         this.editor = editor;
         this.period = period;
+        editor.subscribeEvent(SelectionChangeEvent.class, this);
     }
 
-    void setPeriod(int period) {
+    @Override
+    public void onReceive(SelectionChangeEvent event, Unsubscribe unsubscribe) {
+        onSelectionChanged();
+    }
+
+    public void setPeriod(int period) {
         this.period = period;
         if (period <= 0) {
             visibility = true;
@@ -53,13 +63,12 @@ final class CursorBlink implements Runnable {
         }
     }
 
-    void onSelectionChanged() {
+    public void onSelectionChanged() {
         lastSelectionModificationTime = System.currentTimeMillis();
         visibility = true;
     }
 
-    boolean isSelectionVisible() {
-        buffer = editor.mLayout.getCharLayoutOffset(editor.getCursor().getLeftLine(), editor.getCursor().getLeftColumn(), buffer);
+    public boolean isSelectionVisible() {
         return (buffer[0] >= editor.getOffsetY() && buffer[0] - editor.getRowHeight() <= editor.getOffsetY() + editor.getHeight()
                 && buffer[1] >= editor.getOffsetX() && buffer[1] - 100f/* larger than a single character */ <= editor.getOffsetX() + editor.getWidth());
     }
@@ -69,9 +78,18 @@ final class CursorBlink implements Runnable {
         if (valid && period > 0) {
             if (System.currentTimeMillis() - lastSelectionModificationTime >= period * 2L) {
                 visibility = !visibility;
+                buffer = editor.mLayout.getCharLayoutOffset(editor.getCursor().getLeftLine(), editor.getCursor().getLeftColumn(), buffer);
                 if (!editor.getCursor().isSelected() && isSelectionVisible()) {
-                    editor.invalidate();
+                    // Invalidate dirty region
+                    var delta = (int)(editor.getDpUnit() * 10);
+                    var l = (int)buffer[1] - delta;
+                    var r = l + delta * 2;
+                    var b = (int)buffer[0] + delta;
+                    var t = b - delta * 2;
+                    editor.postInvalidate(l, t, r, b);
                 }
+            } else {
+                visibility = true;
             }
             editor.postDelayed(this, period);
         } else {

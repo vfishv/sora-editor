@@ -31,8 +31,15 @@ import android.view.MotionEvent;
 import android.view.ScaleGestureDetector;
 import android.widget.OverScroller;
 
-import io.github.rosemoe.sora.interfaces.EditorTextActionPresenter;
+import io.github.rosemoe.sora.event.ClickEvent;
+import io.github.rosemoe.sora.event.DoubleClickEvent;
+import io.github.rosemoe.sora.event.HandleStateChangeEvent;
+import io.github.rosemoe.sora.event.LongPressEvent;
+import io.github.rosemoe.sora.event.ScrollEvent;
+import io.github.rosemoe.sora.event.SelectionChangeEvent;
+import io.github.rosemoe.sora.text.ICUUtils;
 import io.github.rosemoe.sora.util.IntPair;
+import io.github.rosemoe.sora.widget.component.Magnifier;
 import io.github.rosemoe.sora.widget.style.SelectionHandleStyle;
 
 /**
@@ -41,7 +48,7 @@ import io.github.rosemoe.sora.widget.style.SelectionHandleStyle;
  * @author Rose
  */
 @SuppressWarnings("CanBeFinal")
-final class EditorTouchEventHandler implements GestureDetector.OnGestureListener, GestureDetector.OnDoubleTapListener, ScaleGestureDetector.OnScaleGestureListener {
+public final class EditorTouchEventHandler implements GestureDetector.OnGestureListener, GestureDetector.OnDoubleTapListener, ScaleGestureDetector.OnScaleGestureListener {
 
     private final static int HIDE_DELAY = 3000;
     private final static int SELECTION_HANDLE_RESIZE_DELAY = 180;
@@ -56,8 +63,6 @@ final class EditorTouchEventHandler implements GestureDetector.OnGestureListener
     float maxSize, minSize;
     private long mLastScroll = 0;
     private long mLastSetSelection = 0;
-    private long mLastTouchedSelectionHandle = 0;
-    private long mLastInteraction = 0;
     private boolean mHoldingScrollbarVertical = false;
     private boolean mHoldingScrollbarHorizontal = false;
     private boolean mHoldingInsertHandle = false;
@@ -100,34 +105,8 @@ final class EditorTouchEventHandler implements GestureDetector.OnGestureListener
         return Character.isJavaIdentifierPart(ch);
     }
 
-    protected boolean hasAnyHeldHandle() {
+    public boolean hasAnyHeldHandle() {
         return holdInsertHandle() || mSelHandleType != -1;
-    }
-
-    /**
-     * Checks whether the provided character is a whitespace
-     *
-     * @param c the char to check
-     * @return Whether the provided character is a whitespace
-     */
-    private boolean isWhitespace(char c) {
-        return (c == '\t' || c == ' ' || c == '\f' || c == '\n' || c == '\r');
-    }
-
-    /**
-     * Handles the selected text click event
-     *
-     * @param e      the MotionEvent
-     * @param line   line number index
-     * @param column column index in line
-     */
-    private void handleSelectedTextClick(MotionEvent e, int line, int column) {
-        boolean isShowing1 = mEditor.getTextActionPresenter() instanceof EditorTextActionWindow && ((EditorTextActionWindow) mEditor.getTextActionPresenter()).isShowing();
-        boolean isShowing2 = mEditor.getTextActionPresenter() instanceof TextActionPopupWindow && ((TextActionPopupWindow) mEditor.getTextActionPresenter()).isShowing();
-        char text = mEditor.getText().charAt(line, column);
-        if (isWhitespace(text) || isShowing1 || isShowing2)
-            mEditor.setSelection(line, column);
-        else mEditor.getTextActionPresenter().onSelectedTextClicked(e);
     }
 
     /**
@@ -183,18 +162,7 @@ final class EditorTouchEventHandler implements GestureDetector.OnGestureListener
      * @return Whether to draw
      */
     public boolean shouldDrawInsertHandle() {
-        return (System.currentTimeMillis() - mLastSetSelection < HIDE_DELAY || mHoldingInsertHandle) && checkActionWindow();
-    }
-
-    /**
-     * Check whether the text action window is shown
-     */
-    private boolean checkActionWindow() {
-        EditorTextActionPresenter presenter = mEditor.mTextActionPresenter;
-        if (presenter instanceof EditorTextActionWindow) {
-            return !((EditorTextActionWindow) presenter).isShowing();
-        }
-        return true;
+        return (System.currentTimeMillis() - mLastSetSelection < HIDE_DELAY || mHoldingInsertHandle);
     }
 
     /**
@@ -234,62 +202,12 @@ final class EditorTouchEventHandler implements GestureDetector.OnGestureListener
     }
 
     /**
-     * Notify the editor later to resize touched selection handle to normal size
-     */
-    public void notifyTouchedSelectionHandlerLater() {
-        mLastTouchedSelectionHandle = System.currentTimeMillis();
-        class InvalidateNotifier implements Runnable {
-
-            @Override
-            public void run() {
-                if (System.currentTimeMillis() - mLastTouchedSelectionHandle >= SELECTION_HANDLE_RESIZE_DELAY) {
-                    mEditor.invalidate();
-                    mEditor.onEndTextSelect();
-                }
-            }
-        }
-        mEditor.postDelayed(new InvalidateNotifier(), SELECTION_HANDLE_RESIZE_DELAY);
-    }
-
-    private int previousX = 0;
-    private int previousY = 0;
-
-    public void notifyGestureInteractionEnd(int type) {
-        mLastInteraction = System.currentTimeMillis();
-        class Notifier implements Runnable {
-            @Override
-            public void run() {
-                if (type == TextComposeBasePopup.SCROLL) {
-                    int x = mScroller.getCurrX();
-                    int y = mScroller.getCurrY();
-                    if (x - previousX == 0 && y - previousY == 0) {
-                        mEditor.invalidate();
-                        mEditor.onEndGestureInteraction();
-                        previousX = 0;
-                        previousY = 0;
-                        return;
-                    }
-                    previousX = x;
-                    previousY = y;
-                    mEditor.postDelayed(this, INTERACTION_END_DELAY);
-                } else if (System.currentTimeMillis() - mLastInteraction >= INTERACTION_END_DELAY) {
-                    mEditor.invalidate();
-                    mEditor.onEndGestureInteraction();
-                }
-            }
-
-        }
-        mEditor.postDelayed(new Notifier(), INTERACTION_END_DELAY);
-    }
-
-
-    /**
      * Called by editor
      * Whether this class is handling motions by user
      *
      * @return Whether handling
      */
-    protected boolean handlingMotions() {
+    public boolean handlingMotions() {
         return holdHorizontalScrollBar() || holdVerticalScrollBar() || holdInsertHandle() || mSelHandleType != -1;
     }
 
@@ -298,29 +216,29 @@ final class EditorTouchEventHandler implements GestureDetector.OnGestureListener
      *
      * @return Scroller using
      */
-    protected OverScroller getScroller() {
+    public OverScroller getScroller() {
         return mScroller;
     }
 
     /**
      * Reset scroll state
      */
-    protected void reset() {
+    public void reset() {
         mScroller.startScroll(0, 0, 0, 0, 0);
     }
 
-    private void updateMagnifier(MotionEvent e) {
+    public void updateMagnifier(MotionEvent e) {
         if (mEdgeFlags != 0) {
             dismissMagnifier();
             return;
         }
-        if (mEditor.isMagnifierEnabled()) {
+        if (mMagnifier.isEnabled()) {
             var height = Math.max(Math.max(mEditor.getInsertHandleDescriptor().position.height(), mEditor.getLeftHandleDescriptor().position.height()), mEditor.getRightHandleDescriptor().position.height());
-            mMagnifier.show((int) e.getX(), (int) (e.getY() - height/2 - mEditor.getRowHeight()));
+            mMagnifier.show((int) e.getX(), (int) (e.getY() - height / 2 - mEditor.getRowHeight()));
         }
     }
 
-    private void dismissMagnifier() {
+    public void dismissMagnifier() {
         mMagnifier.dismiss();
     }
 
@@ -337,7 +255,7 @@ final class EditorTouchEventHandler implements GestureDetector.OnGestureListener
         mMotionY = e.getY();
         mMotionX = e.getX();
         switch (e.getAction()) {
-            case MotionEvent.ACTION_DOWN:{
+            case MotionEvent.ACTION_DOWN: {
                 mHoldingScrollbarVertical = mHoldingScrollbarHorizontal = false;
                 RectF rect = mEditor.getVerticalScrollBarRect();
                 if (rect.contains(e.getX(), e.getY())) {
@@ -362,8 +280,8 @@ final class EditorTouchEventHandler implements GestureDetector.OnGestureListener
                     downY = e.getY();
                     downX = e.getX();
                     updateMagnifier(e);
-
                     insert = new SelectionHandle(SelectionHandle.BOTH);
+                    dispatchHandle(HandleStateChangeEvent.HANDLE_TYPE_INSERT, true);
                 }
                 boolean left = mEditor.getLeftHandleDescriptor().position.contains(e.getX(), e.getY());
                 boolean right = mEditor.getRightHandleDescriptor().position.contains(e.getX(), e.getY());
@@ -375,6 +293,7 @@ final class EditorTouchEventHandler implements GestureDetector.OnGestureListener
                         mSelHandleType = SelectionHandle.RIGHT;
                         mTouchedHandleType = SelectionHandle.RIGHT;
                     }
+                    dispatchHandle(mSelHandleType, true);
                     downY = e.getY();
                     downX = e.getX();
                     updateMagnifier(e);
@@ -384,7 +303,7 @@ final class EditorTouchEventHandler implements GestureDetector.OnGestureListener
                 }
                 return true;
             }
-            case MotionEvent.ACTION_MOVE:{
+            case MotionEvent.ACTION_MOVE: {
                 if (mHoldingScrollbarVertical) {
                     float movedDis = e.getY() - downY;
                     downY = e.getY();
@@ -401,7 +320,7 @@ final class EditorTouchEventHandler implements GestureDetector.OnGestureListener
                     scrollBy(dx, 0);
                     return true;
                 }
-                if(handleSelectionChange(e)) {
+                if (handleSelectionChange(e)) {
                     updateMagnifier(e);
                     if (mTouchedHandleType != -1 || holdInsertHandle()) {
                         mEditor.invalidate();
@@ -429,19 +348,26 @@ final class EditorTouchEventHandler implements GestureDetector.OnGestureListener
                     mHoldingInsertHandle = false;
                     mEditor.invalidate();
                     notifyLater();
+                    dispatchHandle(HandleStateChangeEvent.HANDLE_TYPE_INSERT, false);
                 }
-                mSelHandleType = -1;
+                if (mSelHandleType != -1) {
+                    dispatchHandle(mSelHandleType, false);
+                    mSelHandleType = -1;
+                }
                 mEditor.invalidate();
                 // check touch event is related to text selection or not
                 if (mTouchedHandleType > -1) {
                     mTouchedHandleType = -1;
-                    notifyTouchedSelectionHandlerLater();
                 }
                 stopEdgeScroll();
                 dismissMagnifier();
                 break;
         }
         return false;
+    }
+
+    private void dispatchHandle(int type, boolean held) {
+        mEditor.dispatchEvent(new HandleStateChangeEvent(mEditor, type, held));
     }
 
     private boolean handleSelectionChange(MotionEvent e) {
@@ -495,7 +421,7 @@ final class EditorTouchEventHandler implements GestureDetector.OnGestureListener
         return flags;
     }
 
-    private void scrollIfThumbReachesEdge(MotionEvent e) {
+    public void scrollIfThumbReachesEdge(MotionEvent e) {
         int flag = computeEdgeFlags(e.getX(), e.getY());
         int initialDelta = (int) (8 * mEditor.getDpUnit());
         if (flag != 0 && mEdgeFlags == 0) {
@@ -514,20 +440,15 @@ final class EditorTouchEventHandler implements GestureDetector.OnGestureListener
         return (a < 0 && b < 0) || (a > 0 && b > 0);
     }
 
-    private void stopEdgeScroll() {
+    public void stopEdgeScroll() {
         mEdgeFlags = 0;
     }
 
-    void scrollBy(float distanceX, float distanceY) {
+    public void scrollBy(float distanceX, float distanceY) {
         scrollBy(distanceX, distanceY, false);
     }
 
-    void scrollBy(float distanceX, float distanceY, boolean smooth) {
-        if (mEditor.getTextActionPresenter() instanceof TextActionPopupWindow) {
-            mEditor.getTextActionPresenter().onUpdate(TextActionPopupWindow.SCROLL);
-        } else {
-            mEditor.getTextActionPresenter().onUpdate();
-        }
+    public void scrollBy(float distanceX, float distanceY, boolean smooth) {
         mEditor.hideAutoCompleteWindow();
         int endX = mScroller.getCurrX() + (int) distanceX;
         int endY = mScroller.getCurrY() + (int) distanceY;
@@ -535,6 +456,8 @@ final class EditorTouchEventHandler implements GestureDetector.OnGestureListener
         endY = Math.max(endY, 0);
         endY = Math.min(endY, mEditor.getScrollMaxY());
         endX = Math.min(endX, mEditor.getScrollMaxX());
+        mEditor.dispatchEvent(new ScrollEvent(mEditor, mScroller.getCurrX(),
+                mScroller.getCurrY(), endX, endY, ScrollEvent.CAUSE_USER_DRAG));
         if (smooth) {
             mScroller.startScroll(mScroller.getCurrX(),
                     mScroller.getCurrY(),
@@ -549,7 +472,7 @@ final class EditorTouchEventHandler implements GestureDetector.OnGestureListener
         mEditor.invalidate();
     }
 
-    protected int getTouchedHandleType() {
+    public int getTouchedHandleType() {
         return mTouchedHandleType;
     }
 
@@ -560,120 +483,58 @@ final class EditorTouchEventHandler implements GestureDetector.OnGestureListener
         long res = mEditor.getPointPositionOnScreen(e.getX(), e.getY());
         int line = IntPair.getFirst(res);
         int column = IntPair.getSecond(res);
-        if (mEditor.getCursor().isSelected() && mEditor.getCursor().isInSelectedRegion(line, column) && !mEditor.isOverMaxY(e.getY())) {
-            handleSelectedTextClick(e, line, column);
-        } else {
-            notifyLater();
-            int oldLine = mEditor.getCursor().getLeftLine();
-            int oldColumn = mEditor.getCursor().getLeftColumn();
-            if (line == oldLine && column == oldColumn) {
-                if (mEditor.mTextActionPresenter instanceof EditorTextActionWindow) {
-                    EditorTextActionWindow window = (EditorTextActionWindow) mEditor.mTextActionPresenter;
-                    if (window.isShowing()) {
-                        window.hide();
-                    } else {
-                        window.onBeginTextSelect();
-                        window.onSelectedTextClicked(e);
-                    }
-                }
+        mEditor.performClick();
+        if (mEditor.dispatchEvent(new ClickEvent(mEditor, mEditor.getText().getIndexer().getCharPosition(line, column), e))) {
+            return true;
+        }
+        notifyLater();
+        mEditor.setSelection(line, column, SelectionChangeEvent.CAUSE_TAP);
+        mEditor.hideAutoCompleteWindow();
+        return true;
+    }
+
+    private void selectWord(int line, int column) {
+        // Find word edges
+        int startLine = line, endLine = line;
+        var lineObj = mEditor.getText().getLine(line);
+        long edges = ICUUtils.getWordEdges(lineObj, column);
+        int startColumn = IntPair.getFirst(edges);
+        int endColumn = IntPair.getSecond(edges);
+        if (startColumn == endColumn) {
+            if (startColumn > 0) {
+                startColumn--;
+            } else if (endColumn < lineObj.length()) {
+                endColumn++;
             } else {
-                mEditor.setSelection(line, column);
-                mEditor.hideAutoCompleteWindow();
+                if (line > 0) {
+                    int lastColumn = mEditor.getText().getColumnCount(line - 1);
+                    startLine = line - 1;
+                    startColumn = lastColumn;
+                } else if (line < mEditor.getLineCount() - 1) {
+                    endLine = line + 1;
+                    endColumn = 0;
+                }
             }
         }
-        mEditor.performClick();
-        return true;
+        mEditor.setSelectionRegion(startLine, startColumn, endLine, endColumn, SelectionChangeEvent.CAUSE_LONG_PRESS);
     }
 
     @Override
     public void onLongPress(MotionEvent e) {
-        if (mEditor.mTextActionPresenter instanceof TextActionPopupWindow) {
-            handleLongPressForModifiedTextAction(e);
-            return;
-        }
         if (mEditor.getCursor().isSelected() || e.getPointerCount() != 1) {
             return;
         }
         long res = mEditor.getPointPositionOnScreen(e.getX(), e.getY());
         int line = IntPair.getFirst(res);
         int column = IntPair.getSecond(res);
-        //Find word edges
-        int startLine = line, endLine = line;
-        int startColumn = column;
-        while (startColumn > 0 && isIdentifierPart(mEditor.getText().charAt(line, startColumn - 1))) {
-            startColumn--;
-        }
-        int maxColumn = mEditor.getText().getColumnCount(line);
-        int endColumn = column;
-        while (endColumn < maxColumn && isIdentifierPart(mEditor.getText().charAt(line, endColumn))) {
-            endColumn++;
-        }
-        if (startColumn == endColumn) {
-            if (startColumn > 0) {
-                startColumn--;
-            } else if (endColumn < maxColumn) {
-                endColumn++;
-            } else {
-                if (line > 0) {
-                    int lastColumn = mEditor.getText().getColumnCount(line - 1);
-                    startLine = line - 1;
-                    startColumn = lastColumn;
-                } else if (line < mEditor.getLineCount() - 1) {
-                    endLine = line + 1;
-                    endColumn = 0;
-                }
-            }
-        }
-        mEditor.setSelectionRegion(startLine, startColumn, endLine, endColumn);
-    }
-
-    private void handleLongPressForModifiedTextAction(MotionEvent e) {
-        if (mEditor.getCursor().isSelected() || e.getPointerCount() != 1) {
+        if (mEditor.dispatchEvent(new LongPressEvent(mEditor, mEditor.getText().getIndexer().getCharPosition(line, column), e))) {
             return;
         }
-        long res = mEditor.getPointPositionOnScreen(e.getX(), e.getY());
-        int line = IntPair.getFirst(res);
-        int column = IntPair.getSecond(res);
-        //Find word edges
-        int startColumn = column;
-        while (startColumn > 0 && isIdentifierPart(mEditor.getText().charAt(line, startColumn - 1))) {
-            startColumn--;
-        }
-        int maxColumn = mEditor.getText().getColumnCount(line);
-        int endColumn = column;
-        while (endColumn < maxColumn && isIdentifierPart(mEditor.getText().charAt(line, endColumn))) {
-            endColumn++;
-        }
-        int startLine = line, endLine = line;
-        if (startColumn == endColumn) {
-            if (startColumn > 0) {
-                startColumn--;
-            } else if (endColumn < maxColumn) {
-                endColumn++;
-            } else {
-                if (line > 0) {
-                    int lastColumn = mEditor.getText().getColumnCount(line - 1);
-                    startLine = line - 1;
-                    startColumn = lastColumn;
-                } else if (line < mEditor.getLineCount() - 1) {
-                    endLine = line + 1;
-                    endColumn = 0;
-                }
-            }
-            mEditor.setSelectionRegion(startLine, startColumn, endLine, endColumn);
-            mEditor.showTextActionPopup();
-        } else {
-            mEditor.setSelectionRegion(line, startColumn, line, endColumn);
-        }
+        selectWord(line, column);
     }
 
     @Override
     public boolean onScroll(MotionEvent e1, MotionEvent e2, float distanceX, float distanceY) {
-        if (mEditor.getTextActionPresenter() instanceof TextActionPopupWindow) {
-            mEditor.getTextActionPresenter().onUpdate(TextActionPopupWindow.SCROLL);
-        } else {
-            mEditor.getTextActionPresenter().onUpdate();
-        }
         int endX = mScroller.getCurrX() + (int) distanceX;
         int endY = mScroller.getCurrY() + (int) distanceY;
         endX = Math.max(endX, 0);
@@ -708,6 +569,7 @@ final class EditorTouchEventHandler implements GestureDetector.OnGestureListener
                 mScroller.getCurrY(),
                 endX - mScroller.getCurrX(),
                 endY - mScroller.getCurrY(), 0);
+        mEditor.updateCompletionWindowPosition(false);
         final float minOverPull = 2f;
         if (notifyY && mScroller.getCurrY() + distanceY < -minOverPull) {
             mEditor.getVerticalEdgeEffect().onPull(-distanceY / mEditor.getMeasuredHeight(), Math.max(0, Math.min(1, e2.getX() / mEditor.getWidth())));
@@ -726,13 +588,14 @@ final class EditorTouchEventHandler implements GestureDetector.OnGestureListener
             leftOrRight = true;
         }
         mEditor.invalidate();
-        mEditor.updateCompletionWindowPosition(false);
+        mEditor.dispatchEvent(new ScrollEvent(mEditor, mScroller.getCurrX(),
+                mScroller.getCurrY(), endX, endY, ScrollEvent.CAUSE_USER_DRAG));
         return true;
     }
 
     @Override
     public boolean onFling(MotionEvent e1, MotionEvent e2, float velocityX, float velocityY) {
-        if (mEditor.isDrag()) {
+        if (!mEditor.getProps().scrollFling) {
             return false;
         }
         // If we do not finish it here, it can produce a high speed and cause the final scroll range to be broken, even a NaN for velocity
@@ -745,8 +608,8 @@ final class EditorTouchEventHandler implements GestureDetector.OnGestureListener
                 mEditor.getScrollMaxX(),
                 0,
                 mEditor.getScrollMaxY(),
-                mEditor.isOverScrollEnabled() && !mEditor.isWordwrap() ? (int) (20 * mEditor.getDpUnit()) : 0,
-                mEditor.isOverScrollEnabled() ? (int) (20 * mEditor.getDpUnit()) : 0);
+                mEditor.getProps().overScrollEnabled && !mEditor.isWordwrap() ? (int) (20 * mEditor.getDpUnit()) : 0,
+                mEditor.getProps().overScrollEnabled ? (int) (20 * mEditor.getDpUnit()) : 0);
         mEditor.invalidate();
         float minVe = mEditor.getDpUnit() * 2000;
         if (Math.abs(velocityX) >= minVe || Math.abs(velocityY) >= minVe) {
@@ -759,6 +622,8 @@ final class EditorTouchEventHandler implements GestureDetector.OnGestureListener
         if (Math.abs(velocityY) >= minVe) {
             mEditor.getVerticalEdgeEffect().finish();
         }
+        mEditor.dispatchEvent(new ScrollEvent(mEditor, mScroller.getCurrX(),
+                mScroller.getCurrY(), mScroller.getFinalX(), mScroller.getFinalY(), ScrollEvent.CAUSE_USER_FLING));
         return false;
     }
 
@@ -778,7 +643,9 @@ final class EditorTouchEventHandler implements GestureDetector.OnGestureListener
             float afterScrollX = (mScroller.getCurrX() + focusX) * detector.getScaleFactor() - focusX;
             afterScrollX = Math.max(0, Math.min(afterScrollX, mEditor.getScrollMaxX()));
             afterScrollY = Math.max(0, Math.min(afterScrollY, mEditor.getScrollMaxY()));
-            mScroller.startScroll((int)afterScrollX, (int)afterScrollY, 0, 0, 0);
+            mEditor.dispatchEvent(new ScrollEvent(mEditor, mScroller.getCurrX(),
+                    mScroller.getCurrY(), (int)afterScrollX, (int)afterScrollY, ScrollEvent.CAUSE_SCALE_TEXT));
+            mScroller.startScroll((int) afterScrollX, (int) afterScrollY, 0, 0, 0);
             isScaling = true;
             mEditor.invalidate();
             return true;
@@ -795,6 +662,7 @@ final class EditorTouchEventHandler implements GestureDetector.OnGestureListener
     @Override
     public void onScaleEnd(ScaleGestureDetector detector) {
         isScaling = false;
+        mEditor.updateTimestamp();
         mEditor.createLayout();
         mEditor.invalidate();
     }
@@ -815,7 +683,16 @@ final class EditorTouchEventHandler implements GestureDetector.OnGestureListener
 
     @Override
     public boolean onDoubleTap(MotionEvent e) {
-        onLongPress(e);
+        if (mEditor.getCursor().isSelected() || e.getPointerCount() != 1) {
+            return true;
+        }
+        long res = mEditor.getPointPositionOnScreen(e.getX(), e.getY());
+        int line = IntPair.getFirst(res);
+        int column = IntPair.getSecond(res);
+        if (mEditor.dispatchEvent(new DoubleClickEvent(mEditor, mEditor.getText().getIndexer().getCharPosition(line, column), e))) {
+            return true;
+        }
+        selectWord(line, column);
         return true;
     }
 
@@ -831,9 +708,9 @@ final class EditorTouchEventHandler implements GestureDetector.OnGestureListener
     @SuppressWarnings("CanBeFinal")
     class SelectionHandle {
 
-        public static final int LEFT = 0;
-        public static final int RIGHT = 1;
-        public static final int BOTH = 2;
+        public static final int LEFT = HandleStateChangeEvent.HANDLE_TYPE_LEFT;
+        public static final int RIGHT = HandleStateChangeEvent.HANDLE_TYPE_RIGHT;
+        public static final int BOTH = HandleStateChangeEvent.HANDLE_TYPE_INSERT;
 
         public int type;
 
@@ -845,7 +722,7 @@ final class EditorTouchEventHandler implements GestureDetector.OnGestureListener
         public SelectionHandle(int type) {
             this.type = type;
         }
-        
+
         private boolean checkNoIntersection(SelectionHandleStyle.HandleDescriptor one, SelectionHandleStyle.HandleDescriptor another) {
             return !RectF.intersects(one.position, another.position);
         }
@@ -882,48 +759,46 @@ final class EditorTouchEventHandler implements GestureDetector.OnGestureListener
                     switch (type) {
                         case BOTH:
                             mEditor.cancelAnimation();
-                            mEditor.setSelection(line, column, false);
+                            mEditor.setSelection(line, column, false, SelectionChangeEvent.CAUSE_SELECTION_HANDLE);
                             break;
                         case RIGHT:
                             if (anotherLine > line || (anotherLine == line && anotherColumn > column)) {
                                 //Swap type
-                                if(checkNoIntersection(descriptor, anotherDesc)) {
+                                if (checkNoIntersection(descriptor, anotherDesc)) {
+                                    dispatchHandle(mSelHandleType, false);
                                     EditorTouchEventHandler.this.mSelHandleType = LEFT;
+                                    dispatchHandle(mSelHandleType, true);
                                     this.type = LEFT;
                                     left.type = RIGHT;
                                     SelectionHandle tmp = right;
                                     right = left;
                                     left = tmp;
-                                    mEditor.setSelectionRegion(line, column, anotherLine, anotherColumn, false);
+                                    mEditor.setSelectionRegion(line, column, anotherLine, anotherColumn, false, SelectionChangeEvent.CAUSE_SELECTION_HANDLE);
                                 }
                             } else {
-                                mEditor.setSelectionRegion(anotherLine, anotherColumn, line, column, false);
+                                mEditor.setSelectionRegion(anotherLine, anotherColumn, line, column, false, SelectionChangeEvent.CAUSE_SELECTION_HANDLE);
                             }
                             break;
                         case LEFT:
                             if (anotherLine < line || (anotherLine == line && anotherColumn < column)) {
                                 //Swap type
-                                if(checkNoIntersection(descriptor, anotherDesc)) {
+                                if (checkNoIntersection(descriptor, anotherDesc)) {
+                                    dispatchHandle(mSelHandleType, false);
                                     EditorTouchEventHandler.this.mSelHandleType = RIGHT;
+                                    dispatchHandle(mSelHandleType, true);
                                     this.type = RIGHT;
                                     right.type = LEFT;
                                     SelectionHandle tmp = right;
                                     right = left;
                                     left = tmp;
-                                    mEditor.setSelectionRegion(anotherLine, anotherColumn, line, column, false);
+                                    mEditor.setSelectionRegion(anotherLine, anotherColumn, line, column, false, SelectionChangeEvent.CAUSE_SELECTION_HANDLE);
                                 }
                             } else {
-                                mEditor.setSelectionRegion(line, column, anotherLine, anotherColumn, false);
+                                mEditor.setSelectionRegion(line, column, anotherLine, anotherColumn, false, SelectionChangeEvent.CAUSE_SELECTION_HANDLE);
                             }
                             break;
                     }
                 }
-            }
-
-            if (mEditor.getTextActionPresenter() instanceof TextActionPopupWindow) {
-                mEditor.getTextActionPresenter().onUpdate(TextActionPopupWindow.DRAG);
-            } else {
-                mEditor.getTextActionPresenter().onUpdate();
             }
         }
 
@@ -998,7 +873,7 @@ final class EditorTouchEventHandler implements GestureDetector.OnGestureListener
             // Update selection
             handleSelectionChange2(mThumb);
 
-            postTimes ++;
+            postTimes++;
             // Post for animation
             if (mEdgeFlags != 0) {
                 mEditor.postDelayed(this, 10);

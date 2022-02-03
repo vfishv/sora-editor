@@ -124,10 +124,6 @@ public class JavaTextTokenizer {
         return currToken;
     }
 
-    public String yyDesc() {
-        return " Line：" + line + " Column：" + column;
-    }
-
     private char charAt(int i) {
         return source.charAt(i);
     }
@@ -256,7 +252,6 @@ public class JavaTextTokenizer {
                     scanStringLiteral();
                     return Tokens.STRING;
                 default:
-                    //error("没有匹配的Token : '" + ch + " '", new StringAdvice("检查是否使用了非法的符号，比如误使用了中文符号代替英文符号等"));
                     return Tokens.UNKNOWN;
             }
         }
@@ -480,7 +475,7 @@ public class JavaTextTokenizer {
                 "goto", "continue", "break", "transient", "void", "try", "catch",
                 "finally", "while", "case", "default", "const", "enum", "extends",
                 "implements", "import", "instanceof", "interface", "native",
-                "this", "throw", "throws", "true", "false", "null"
+                "this", "throw", "throws", "true", "false", "null", "var", "sealed", "permits"
         };
         Tokens[] sTokens = new Tokens[]{
                 Tokens.ABSTRACT, Tokens.ASSERT, Tokens.BOOLEAN, Tokens.BYTE, Tokens.CHAR, Tokens.CLASS, Tokens.DO,
@@ -490,7 +485,7 @@ public class JavaTextTokenizer {
                 Tokens.GOTO, Tokens.CONTINUE, Tokens.BREAK, Tokens.TRANSIENT, Tokens.VOID, Tokens.TRY, Tokens.CATCH,
                 Tokens.FINALLY, Tokens.WHILE, Tokens.CASE, Tokens.DEFAULT, Tokens.CONST, Tokens.ENUM, Tokens.EXTENDS,
                 Tokens.IMPLEMENTS, Tokens.IMPORT, Tokens.INSTANCEOF, Tokens.INTERFACE, Tokens.NATIVE,
-                Tokens.THIS, Tokens.THROW, Tokens.THROWS, Tokens.TRUE, Tokens.FALSE, Tokens.NULL
+                Tokens.THIS, Tokens.THROW, Tokens.THROWS, Tokens.TRUE, Tokens.FALSE, Tokens.NULL, Tokens.VAR, Tokens.SEALED, Tokens.PERMITS
         };
         keywords = new TrieTree<>();
         for (int i = 0; i < sKeywords.length; i++) {

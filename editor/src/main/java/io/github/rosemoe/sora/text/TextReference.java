@@ -62,6 +62,9 @@ public class TextReference implements CharSequence {
         }
     }
 
+    /**
+     * Get original text of the reference
+     */
     @NonNull
     public CharSequence getReference() {
         return ref;
@@ -101,10 +104,22 @@ public class TextReference implements CharSequence {
     }
 
     public void validateAccess() {
-        validator.validate();
+        if (validator != null)
+            validator.validate();
     }
 
     public interface Validator {
         void validate();
+    }
+
+    public static class ValidateFailedException extends RuntimeException {
+
+        public ValidateFailedException() {
+        }
+
+        public ValidateFailedException(String message) {
+            super(message);
+        }
+
     }
 }

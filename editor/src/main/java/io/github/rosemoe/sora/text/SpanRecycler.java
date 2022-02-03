@@ -29,7 +29,7 @@ import java.util.List;
 import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.BlockingQueue;
 
-import io.github.rosemoe.sora.data.Span;
+import io.github.rosemoe.sora.lang.styling.Span;
 
 public class SpanRecycler {
 
@@ -77,11 +77,15 @@ public class SpanRecycler {
                         for (List<Span> spans : spanMap) {
                             int size = spans.size();
                             for (int i = 0; i < size; i++) {
-                                spans.remove(size - 1 - i).recycle();
+                                var recycled = spans.remove(size - 1 - i).recycle();
+                                if (!recycled) {
+                                    break;
+                                }
                                 count++;
                             }
                         }
-                        Log.i(LOG_TAG, "Recycled " + count + " spans");
+                        spanMap.clear();
+                        Log.i(LOG_TAG, "Called recycle() on " + count + " spans");
                     } catch (InterruptedException e) {
                         e.printStackTrace();
                         break;

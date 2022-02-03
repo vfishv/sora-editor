@@ -46,13 +46,20 @@ final class UndoManager implements ContentListener {
     /**
      * Create an UndoManager
      */
-    protected UndoManager() {
+    UndoManager() {
         mActionStack = new ArrayList<>();
         mReplaceMark = false;
         mInsertAction = null;
         mDeleteAction = null;
         mStackPointer = 0;
         mIgnoreModification = false;
+    }
+
+    /**
+     * Check whether we are currently in undo/redo operations
+     */
+    public boolean isModifyingContent() {
+        return mIgnoreModification;
     }
 
     /**
@@ -84,18 +91,14 @@ final class UndoManager implements ContentListener {
     }
 
     /**
-     * Whether can undo
-     *
-     * @return Whether can undo
+     * Whether it can undo
      */
     public boolean canUndo() {
         return isUndoEnabled() && (mStackPointer > 0);
     }
 
     /**
-     * Whether can redo
-     *
-     * @return Whether can redo
+     * Whether it can redo
      */
     public boolean canRedo() {
         return isUndoEnabled() && (mStackPointer < mActionStack.size());
@@ -290,7 +293,7 @@ final class UndoManager implements ContentListener {
          * Get whether the target action can be merged with this action
          *
          * @param action Target action to merge
-         * @return Whether can merge
+         * @return Whether they can merge
          */
         boolean canMerge(ContentAction action);
 

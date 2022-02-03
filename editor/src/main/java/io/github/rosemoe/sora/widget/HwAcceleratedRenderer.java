@@ -28,11 +28,10 @@ import android.graphics.RenderNode;
 
 import androidx.annotation.RequiresApi;
 
-import java.util.List;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 import io.github.rosemoe.sora.annotations.Experimental;
-import io.github.rosemoe.sora.data.Span;
+import io.github.rosemoe.sora.lang.styling.EmptyReader;
 import io.github.rosemoe.sora.text.Content;
 import io.github.rosemoe.sora.text.ContentListener;
 import io.github.rosemoe.sora.util.ArrayList;
@@ -85,21 +84,6 @@ class HwAcceleratedRenderer implements ContentListener {
         cache.forEach(node -> node.isDirty = true);
     }
 
-    public void invalidateDirtyRegions(List<List<Span>> old, List<List<Span>> updated) {
-        //Simply compares hash code
-        cache.forEach((node) -> {
-            try {
-                var olds = old.get(node.line);
-                var news = updated.get(node.line);
-                if ((olds.size() != news.size() || olds.hashCode() != news.hashCode())) {
-                    node.isDirty = true;
-                }
-            } catch (IndexOutOfBoundsException | NullPointerException e) {
-                node.isDirty = true;
-            }
-        });
-    }
-
     public TextRenderNode getNode(int line) {
         var size = cache.size();
         for (int i = 0; i < size; i++) {
@@ -121,6 +105,7 @@ class HwAcceleratedRenderer implements ContentListener {
             var node = itr.next();
             if (node.line < start || node.line > end) {
                 itr.remove();
+                node.renderNode.discardDisplayList();
             }
         }
     }
@@ -129,19 +114,23 @@ class HwAcceleratedRenderer implements ContentListener {
         if (!canvas.isHardwareAccelerated()) {
             throw new UnsupportedOperationException("Only hardware-accelerated canvas can be used");
         }
-        var spanMap = editor.getTextAnalyzeResult().getSpanMap();
+        var styles = editor.getStyles();
         // It's safe to use row directly because the mode is non-wordwrap
         var node = getNode(line);
         if (node.needsRecord()) {
-            List<Span> spans = null;
-            if (line < spanMap.size() && line >= 0) {
-                spans = spanMap.get(line);
+            var spans = styles == null ? null : styles.spans;
+            var reader = spans == null ? new EmptyReader() : spans.read();
+            try {
+                reader.moveToLine(line);
+            } catch (Exception e) {
+                reader = new EmptyReader();
             }
-            if (spans == null || spans.size() == 0) {
-                spans = new ArrayList<>();
-                spans.add(Span.obtain(0, EditorColorScheme.TEXT_NORMAL));
+            editor.updateLineDisplayList(node.renderNode, line, reader);
+            try {
+                reader.moveToLine(-1);
+            } catch (Exception e) {
+                e.printStackTrace();
             }
-            editor.updateLineDisplayList(node.renderNode, line, spans);
             node.isDirty = false;
         }
         canvas.save();

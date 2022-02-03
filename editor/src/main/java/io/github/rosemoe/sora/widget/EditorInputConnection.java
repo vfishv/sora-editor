@@ -34,9 +34,11 @@ import android.view.inputmethod.BaseInputConnection;
 import android.view.inputmethod.ExtractedText;
 import android.view.inputmethod.ExtractedTextRequest;
 
+import io.github.rosemoe.sora.event.SelectionChangeEvent;
 import io.github.rosemoe.sora.text.CharPosition;
 import io.github.rosemoe.sora.text.Content;
 import io.github.rosemoe.sora.text.Cursor;
+import io.github.rosemoe.sora.widget.component.EditorAutoCompletion;
 
 /**
  * Connection between input method and editor
@@ -46,7 +48,6 @@ import io.github.rosemoe.sora.text.Cursor;
 class EditorInputConnection extends BaseInputConnection {
 
     private final static String LOG_TAG = "EditorInputConnection";
-    final static int TEXT_LENGTH_LIMIT = 500000;
 
     private final CodeEditor mEditor;
     protected int mComposingLine = -1;
@@ -66,8 +67,6 @@ class EditorInputConnection extends BaseInputConnection {
     }
 
     protected void invalid() {
-        //Logs.log("Connection is set to invalid");
-        //Logs.dumpStack();
         mInvalid = true;
         mComposingEnd = mComposingStart = mComposingLine = -1;
         mEditor.invalidate();
@@ -77,7 +76,6 @@ class EditorInputConnection extends BaseInputConnection {
      * Reset the state of this connection
      */
     protected void reset() {
-        //Logs.log("Connection reset");
         mComposingEnd = mComposingStart = mComposingLine = -1;
         mInvalid = false;
     }
@@ -94,7 +92,6 @@ class EditorInputConnection extends BaseInputConnection {
 
     @Override
     public synchronized void closeConnection() {
-        //Logs.log("close connection");
         super.closeConnection();
         Content content = mEditor.getText();
         while (content.isInBatchEdit()) {
@@ -128,9 +125,11 @@ class EditorInputConnection extends BaseInputConnection {
         if (end < start) {
             start = end = 0;
         }
+        if (end - start > mEditor.getProps().maxIPCTextLength) {
+            end = start + mEditor.getProps().maxIPCTextLength;
+        }
         Content sub = (Content) origin.subSequence(start, end);
         if (flags == GET_TEXT_WITH_STYLES) {
-            sub.beginStreamCharGetting(0);
             SpannableStringBuilder text = new SpannableStringBuilder(sub);
             // Apply composing span
             if (mComposingLine != -1) {
@@ -172,35 +171,27 @@ class EditorInputConnection extends BaseInputConnection {
 
     @Override
     public CharSequence getSelectedText(int flags) {
-        //Logs.log("getSelectedText()");
         //This text should be limited because when the user try to select all text
         //it can be quite large text and costs time, which will finally cause ANR
         int left = getCursor().getLeft();
         int right = getCursor().getRight();
-        if (right - left > TEXT_LENGTH_LIMIT) {
-            right = left + TEXT_LENGTH_LIMIT;
-        }
         return left == right ? null : getTextRegion(left, right, flags);
     }
 
     @Override
     public CharSequence getTextBeforeCursor(int length, int flags) {
-        //Logs.log("getTextBeforeCursor()");
         int start = getCursor().getLeft();
         return getTextRegion(start - length, start, flags);
     }
 
     @Override
     public CharSequence getTextAfterCursor(int length, int flags) {
-        //Logs.log("getTextAfterCursor()");
         int end = getCursor().getRight();
         return getTextRegion(end, end + length, flags);
     }
 
     @Override
     public boolean commitText(CharSequence text, int newCursorPosition) {
-        //Logs.log("Commit text: text = " + text + ", newCursorPosition = " + newCursorPosition);
-        //Log.d(LOG_TAG, "commit text:text = " + text + ", newCur = " + newCursorPosition);
         if (!mEditor.isEditable() || mInvalid) {
             return false;
         }
@@ -234,14 +225,14 @@ class EditorInputConnection extends BaseInputConnection {
         deleteComposingText();
         // Replace text
         SymbolPairMatch.Replacement replacement = null;
-        if (text.length() == 1 && mEditor.isSymbolCompletionEnabled()) {
+        if (text.length() == 1 && mEditor.getProps().symbolPairAutoCompletion) {
             replacement = mEditor.mLanguageSymbolPairs.getCompletion(text.charAt(0));
         }
         // newCursorPosition ignored
         // Call onCommitText() can make auto indent and delete text selected automatically
         if (replacement == null || replacement == SymbolPairMatch.Replacement.NO_REPLACEMENT
                 || (replacement.shouldNotDoReplace(mEditor.getText()) && replacement.notHasAutoSurroundPair())) {
-            getCursor().onCommitText(text, applyAutoIndent);
+            mEditor.commitText(text, applyAutoIndent);
         } else {
             String[] autoSurroundPair;
             if (getCursor().isSelected() && (autoSurroundPair = replacement.getAutoSurroundPair()) != null) {
@@ -252,15 +243,15 @@ class EditorInputConnection extends BaseInputConnection {
                 mEditor.getText().insert(getCursor().getRightLine(), getCursor().getRightColumn(), autoSurroundPair[1]);
                 mEditor.getText().endBatchEdit();
                 //cancel selected
-                mEditor.setSelection(getCursor().getLeftLine(), getCursor().getLeftColumn() + autoSurroundPair[0].length()-1);
+                mEditor.setSelection(getCursor().getLeftLine(), getCursor().getLeftColumn() + autoSurroundPair[0].length()-1, SelectionChangeEvent.CAUSE_TEXT_MODIFICATION);
 
             } else {
-                getCursor().onCommitText(replacement.text,applyAutoIndent);
+                mEditor.commitText(replacement.text, applyAutoIndent);
                 int delta = (replacement.text.length() - replacement.selection);
                 if (delta != 0) {
                     int newSel = Math.max(getCursor().getLeft() - delta, 0);
                     CharPosition charPosition = getCursor().getIndexer().getCharPosition(newSel);
-                    mEditor.setSelection(charPosition.line, charPosition.column);
+                    mEditor.setSelection(charPosition.line, charPosition.column, SelectionChangeEvent.CAUSE_TEXT_MODIFICATION);
                 }
             }
         }
@@ -283,7 +274,6 @@ class EditorInputConnection extends BaseInputConnection {
 
     @Override
     public boolean deleteSurroundingText(int beforeLength, int afterLength) {
-        //Logs.log("deleteSurroundingText: before = " + beforeLength + ", after = " + afterLength);
         if (!mEditor.isEditable() || mInvalid) {
             return false;
         }
@@ -364,13 +354,11 @@ class EditorInputConnection extends BaseInputConnection {
 
     @Override
     public synchronized boolean beginBatchEdit() {
-        //Logs.log("beginBatchEdit()");
         return mEditor.getText().beginBatchEdit();
     }
 
     @Override
     public synchronized boolean endBatchEdit() {
-        //Logs.log("endBatchEdit()");
         boolean inBatch = mEditor.getText().endBatchEdit();
         if (!inBatch) {
             mEditor.updateSelection();
@@ -381,27 +369,29 @@ class EditorInputConnection extends BaseInputConnection {
     private void deleteSelected() {
         if (getCursor().isSelected()) {
             // Delete selected text
-            getCursor().onDeleteKeyPressed();
+            mEditor.deleteText();
         }
+    }
+
+    private boolean shouldRejectComposing() {
+        return mEditor.getComponent(EditorAutoCompletion.class).shouldRejectComposing();
     }
 
     @Override
     public boolean setComposingText(CharSequence text, int newCursorPosition) {
-        //Logs.log("setComposingText: text = " + text + ", newCursorPosition = " + newCursorPosition);
-        if (!mEditor.isEditable() || mInvalid) {
+        if (!mEditor.isEditable() || mInvalid || shouldRejectComposing()|| mEditor.getProps().disallowSuggestions) {
             return false;
         }
         if (TextUtils.indexOf(text, '\n') != -1) {
             return false;
         }
-        //Log.d(LOG_TAG, "set composing text:text = " + text + ", newCur =" + newCursorPosition);
         if (mComposingLine == -1) {
             // Create composing info
             deleteSelected();
             mComposingLine = getCursor().getLeftLine();
             mComposingStart = getCursor().getLeftColumn();
             mComposingEnd = mComposingStart + text.length();
-            getCursor().onCommitText(text);
+            mEditor.commitText(text);
         } else {
             // Already have composing text
             // Delete first
@@ -444,9 +434,7 @@ class EditorInputConnection extends BaseInputConnection {
 
     @Override
     public boolean setSelection(int start, int end) {
-        //Logs.log("set selection:" + start + ".." + end);
-        //Log.d(LOG_TAG, " set selection:" + start + ".." + end);
-        if (!mEditor.isEditable() || mInvalid) {
+        if (!mEditor.isEditable() || mInvalid || mComposingLine != -1) {
             return false;
         }
         start = getWrappedIndex(start);
@@ -459,19 +447,17 @@ class EditorInputConnection extends BaseInputConnection {
         if (start == getCursor().getLeft() && end == getCursor().getRight()) {
             return true;
         }
-        mEditor.getAutoCompleteWindow().hide();
+        mEditor.getComponent(EditorAutoCompletion.class).hide();
         Content content = mEditor.getText();
         CharPosition startPos = content.getIndexer().getCharPosition(start);
         CharPosition endPos = content.getIndexer().getCharPosition(end);
-        mEditor.setSelectionRegion(startPos.line, startPos.column, endPos.line, endPos.column, false);
+        mEditor.setSelectionRegion(startPos.line, startPos.column, endPos.line, endPos.column, false, SelectionChangeEvent.CAUSE_IME);
         return true;
     }
 
     @Override
     public boolean setComposingRegion(int start, int end) {
-        //Logs.log("set composing region:" + start + ".." + end);
-        //Log.d(LOG_TAG, "set composing region:" + start + ".." + end);
-        if (!mEditor.isEditable() || mInvalid) {
+        if (!mEditor.isEditable() || mInvalid || shouldRejectComposing() || mEditor.getProps().disallowSuggestions) {
             return false;
         }
         try {
@@ -513,7 +499,7 @@ class EditorInputConnection extends BaseInputConnection {
             case android.R.id.cut:
                 mEditor.copyText();
                 if (getCursor().isSelected()) {
-                    getCursor().onDeleteKeyPressed();
+                    mEditor.deleteText();
                 }
                 return true;
             case android.R.id.paste:
@@ -535,16 +521,13 @@ class EditorInputConnection extends BaseInputConnection {
 
     @Override
     public boolean requestCursorUpdates(int cursorUpdateMode) {
-        //Logs.log("Receive update cursor anchor from input method");
         mEditor.updateCursorAnchor();
         return true;
     }
 
     @Override
     public ExtractedText getExtractedText(ExtractedTextRequest request, int flags) {
-        //Logs.log("Get extracted text from input method");
         if ((flags & GET_EXTRACTED_TEXT_MONITOR) != 0) {
-            //Logs.log("Monitor flag is set");
             mEditor.setExtracting(request);
         }
 

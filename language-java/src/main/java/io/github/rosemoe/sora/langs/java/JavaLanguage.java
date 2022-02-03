@@ -23,67 +23,86 @@
  */
 package io.github.rosemoe.sora.langs.java;
 
-import io.github.rosemoe.sora.interfaces.AutoCompleteProvider;
-import io.github.rosemoe.sora.interfaces.CodeAnalyzer;
-import io.github.rosemoe.sora.interfaces.EditorLanguage;
-import io.github.rosemoe.sora.interfaces.NewlineHandler;
-import io.github.rosemoe.sora.langs.IdentifierAutoComplete;
-import io.github.rosemoe.sora.util.MyCharacter;
+import android.os.Bundle;
+
+import androidx.annotation.NonNull;
+
+import io.github.rosemoe.sora.lang.Language;
+import io.github.rosemoe.sora.lang.analysis.AnalyzeManager;
+import io.github.rosemoe.sora.lang.completion.CompletionHelper;
+import io.github.rosemoe.sora.lang.completion.CompletionPublisher;
+import io.github.rosemoe.sora.lang.completion.IdentifierAutoComplete;
+import io.github.rosemoe.sora.lang.smartEnter.NewlineHandleResult;
+import io.github.rosemoe.sora.lang.smartEnter.NewlineHandler;
+import io.github.rosemoe.sora.text.CharPosition;
+import io.github.rosemoe.sora.text.ContentReference;
 import io.github.rosemoe.sora.text.TextUtils;
+import io.github.rosemoe.sora.util.MyCharacter;
 import io.github.rosemoe.sora.widget.SymbolPairMatch;
 
 /**
- * Java language is much complex.
- * This is a basic support
+ * Java language.
+ * Simple implementation.
  *
- * @author Rose
+ * @author Rosemoe
  */
-public class JavaLanguage implements EditorLanguage {
+public class JavaLanguage implements Language {
 
+    private IdentifierAutoComplete autoComplete;
+    private JavaAnalyzeManager manager;
+
+    public JavaLanguage() {
+        autoComplete = new IdentifierAutoComplete(JavaTextTokenizer.sKeywords);
+        manager = new JavaAnalyzeManager();
+    }
+
+    @NonNull
     @Override
-    public CodeAnalyzer getAnalyzer() {
-        return new JavaCodeAnalyzer();
+    public AnalyzeManager getAnalyzeManager() {
+        return manager;
     }
 
     @Override
-    public AutoCompleteProvider getAutoCompleteProvider() {
-        IdentifierAutoComplete autoComplete = new IdentifierAutoComplete();
-        autoComplete.setKeywords(JavaTextTokenizer.sKeywords);
-        return autoComplete;
+    public void destroy() {
+        autoComplete = null;
     }
 
     @Override
-    public boolean isAutoCompleteChar(char ch) {
-        return MyCharacter.isJavaIdentifierPart(ch);
+    public int getInterruptionLevel() {
+        return INTERRUPTION_LEVEL_STRONG;
     }
 
     @Override
-    public int getIndentAdvance(String content) {
+    public void requireAutoComplete(@NonNull ContentReference content, @NonNull CharPosition position,
+                                    @NonNull CompletionPublisher publisher, @NonNull Bundle extraArguments) {
+        var prefix = CompletionHelper.computePrefix(content, position, MyCharacter::isJavaIdentifierPart);
+        autoComplete.requireAutoComplete(prefix, publisher, manager.getData());
+    }
+
+    @Override
+    public int getIndentAdvance(@NonNull ContentReference text, int line, int column) {
+        var content = text.getLine(line).substring(0, column);
+        return getIndentAdvance(content);
+    }
+
+    private int getIndentAdvance(String content) {
         JavaTextTokenizer t = new JavaTextTokenizer(content);
         Tokens token;
         int advance = 0;
         while ((token = t.directNextToken()) != Tokens.EOF) {
-            switch (token) {
-                case LBRACE:
-                    advance++;
-                    break;
-                /*case RBRACE:
-                    advance--;
-                    break;*/
+            if (token == Tokens.LBRACE) {
+                advance++;
             }
         }
         advance = Math.max(0, advance);
         return advance * 4;
     }
 
-    @Override
-    public boolean useTab() {
-        return true;
-    }
+    private final NewlineHandler[] newlineHandlers = new NewlineHandler[]{new BraceHandler()};
 
     @Override
-    public SymbolPairMatch getSymbolPairs() {
-        return new SymbolPairMatch.DefaultSymbolPairs();
+    public boolean useTab() {
+        return false;
     }
 
     @Override
@@ -91,7 +110,10 @@ public class JavaLanguage implements EditorLanguage {
         return text;
     }
 
-    private NewlineHandler[] newlineHandlers = new NewlineHandler[]{new BraceHandler()};
+    @Override
+    public SymbolPairMatch getSymbolPairs() {
+        return new SymbolPairMatch.DefaultSymbolPairs();
+    }
 
     @Override
     public NewlineHandler[] getNewlineHandlers() {
@@ -106,7 +128,7 @@ public class JavaLanguage implements EditorLanguage {
         }
 
         @Override
-        public HandleResult handleNewline(String beforeText, String afterText, int tabSize) {
+        public NewlineHandleResult handleNewline(String beforeText, String afterText, int tabSize) {
             int count = TextUtils.countLeadingSpaceCount(beforeText, tabSize);
             int advanceBefore = getIndentAdvance(beforeText);
             int advanceAfter = getIndentAdvance(afterText);
@@ -116,7 +138,7 @@ public class JavaLanguage implements EditorLanguage {
                     .append('\n')
                     .append(text = TextUtils.createIndent(count + advanceAfter, tabSize, useTab()));
             int shiftLeft = text.length() + 1;
-            return new HandleResult(sb, shiftLeft);
+            return new NewlineHandleResult(sb, shiftLeft);
         }
     }
 

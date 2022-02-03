@@ -23,16 +23,19 @@
  */
 package io.github.rosemoe.sora.graphics;
 
-import static io.github.rosemoe.sora.text.TextStyle.isBold;
-import static io.github.rosemoe.sora.text.TextStyle.isItalics;
+import static io.github.rosemoe.sora.lang.styling.TextStyle.isBold;
+import static io.github.rosemoe.sora.lang.styling.TextStyle.isItalics;
 
 import android.annotation.SuppressLint;
 
 import java.util.List;
 
-import io.github.rosemoe.sora.data.Span;
+import io.github.rosemoe.sora.lang.styling.Span;
 import io.github.rosemoe.sora.text.ContentLine;
 
+/**
+ * Manages graphical(actually measuring) operations of a text row
+ */
 public class GraphicTextRow {
 
     private final static float SKEW_X = -0.2f;
@@ -42,11 +45,12 @@ public class GraphicTextRow {
     private int mEnd;
     private int mTabWidth;
     private List<Span> mSpans;
+    private final float[] mBuffer;
 
     private final static GraphicTextRow[] sCached = new GraphicTextRow[5];
 
     private GraphicTextRow() {
-
+        mBuffer = new float[2];
     }
 
     public static GraphicTextRow obtain() {
@@ -78,11 +82,16 @@ public class GraphicTextRow {
         }
     }
 
+    /**
+     * Reset
+     */
     public void set(ContentLine line, int start, int end, int tabWidth, List<Span> spans, Paint paint) {
         if (mPaint.getTextSize() != paint.getTextSize())
             mPaint.setTextSizeWrapped(paint.getTextSize());
-        if (mPaint.getTypeface() != paint.getTypeface())
-            mPaint.setTypefaceWrapped(paint.getTypeface());
+        var typeface = paint.getTypeface();
+        if (mPaint.getTypeface() != typeface) {
+            mPaint.setTypefaceWrapped(typeface);
+        }
         if (paint.getFontFeatureSettings() != null)
             mPaint.setFontFeatureSettingsWrapped(paint.getFontFeatureSettings());
         mText = line;
@@ -92,25 +101,40 @@ public class GraphicTextRow {
         mSpans = spans;
     }
 
-    public float buildMeasureCache() {
+    /**
+     * Build measure cache for the text
+     */
+    public void buildMeasureCache() {
         if (mText.widthCache == null || mText.widthCache.length < mEnd) {
             mText.widthCache = new float[Math.max(128, mText.length())];
         }
-        return measureTextInternal(mStart, mEnd, mText.widthCache);
+        measureTextInternal(mStart, mEnd, mText.widthCache);
     }
 
+    /**
+     * From {@code start} to measure characters, until measured width add next char's width is bigger
+     * than {@code advance}.
+     *
+     * Note that the result array should not be stored.
+     *
+     * @return Element 0 is offset, Element 1 is measured width
+     */
     public float[] findOffsetByAdvance(int start, float advance) {
         if (mText.widthCache != null) {
             float w = 0f;
             var cache = mText.widthCache;
-            for (int i = start; i < mEnd;i++) {
+            for (int i = start; i <= mEnd;i++) {
                 if (w > advance) {
-                    return new float[] {i, w};
-                } else {
+                    mBuffer[0] = Math.max(start, i - 1);
+                    mBuffer[1] = i > start ? w - cache[i - 1] : w;
+                    return mBuffer;
+                } else if(i < mEnd) {
                     w += cache[i];
                 }
             }
-            return new float[] {mEnd, w};
+            mBuffer[0] = mEnd;
+            mBuffer[1] = w;
+            return mBuffer;
         }
         int regionStart = start;
         int index = 0;
@@ -139,7 +163,7 @@ public class GraphicTextRow {
                 lastStyle = style;
             }
 
-            // Find in sub-region
+            // Find in subregion
             int res = -1;
             {
                 int lastStart = regionStart;
@@ -194,7 +218,13 @@ public class GraphicTextRow {
             mPaint.setFakeBoldText(false);
             mPaint.setTextSkewX(0f);
         }
-        return new float[] {offset, currentPosition};
+        if (currentPosition > advance && offset > start) {
+            offset--;
+            currentPosition -= measureText(offset, offset + 1);
+        }
+        mBuffer[0] = offset;
+        mBuffer[1] = currentPosition;
+        return mBuffer;
     }
 
     public float measureText(int start, int end) {
