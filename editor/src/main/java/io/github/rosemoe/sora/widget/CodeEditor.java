@@ -39,7 +39,6 @@ import android.graphics.Rect;
 import android.graphics.RectF;
 import android.graphics.RenderNode;
 import android.graphics.Typeface;
-import android.icu.text.Bidi;
 import android.os.Build;
 import android.os.Bundle;
 import android.os.Looper;
@@ -379,9 +378,9 @@ public class CodeEditor extends View implements ContentListener, StyleReceiver, 
      * Replace the built-in component to the given one.
      * The new component's enabled state will extend the old one.
      *
-     * @param clazz Built-in class type. Such as {@code EditorAutoCompletion.class}
+     * @param clazz       Built-in class type. Such as {@code EditorAutoCompletion.class}
      * @param replacement The new component to apply
-     * @param <T> Type of built-in component
+     * @param <T>         Type of built-in component
      */
     public <T extends EditorBuiltinComponent> void replaceComponent(@NonNull Class<T> clazz, @NonNull T replacement) {
         var old = getComponent(clazz);
@@ -478,7 +477,7 @@ public class CodeEditor extends View implements ContentListener, StyleReceiver, 
     /**
      * Get the character's y offset on view
      *
-     * @param line The line position of character
+     * @param line   The line position of character
      * @param column The column position of character
      * @return The y offset on view
      */
@@ -1205,7 +1204,7 @@ public class CodeEditor extends View implements ContentListener, StyleReceiver, 
                 drawColor(canvas, currentLineBgColor, mRect);
             }
             for (int i = 0; i < postDrawCurrentLines.size(); i++) {
-                drawRowBackground(canvas, currentLineBgColor, (int) postDrawCurrentLines.get(i), (int) (textOffset + getOffsetX() - mDividerMargin));
+                drawRowBackground(canvas, currentLineBgColor, (int) postDrawCurrentLines.get(i), (int) (textOffset - mDividerMargin + getOffsetX()));
             }
             drawDivider(canvas, lineNumberWidth + mDividerMargin, color.getColor(EditorColorScheme.LINE_DIVIDER));
             for (int i = 0; i < postDrawLineNumbers.size(); i++) {
@@ -1390,7 +1389,14 @@ public class CodeEditor extends View implements ContentListener, StyleReceiver, 
 
             int backgroundColorId = span.getBackgroundColorId();
             if (backgroundColorId != 0) {
-                drawRowRegionBackground(canvas, paintingOffset, row, 0, columnCount, paintStart, paintEnd, mColors.getColor(backgroundColorId), line);
+                if (paintStart != paintEnd) {
+                    mRect.top = getRowTop(row);
+                    mRect.bottom = getRowBottom(row);
+                    mRect.left = paintingOffset;
+                    mRect.right = mRect.left + width;
+                    mPaint.setColor(mColors.getColor(backgroundColorId));
+                    canvas.drawRoundRect(mRect, getRowHeight() * 0.13f, getRowHeight() * 0.13f, mPaint);
+                }
             }
 
 
@@ -1501,7 +1507,7 @@ public class CodeEditor extends View implements ContentListener, StyleReceiver, 
         RowIterator rowIterator = mLayout.obtainRowIterator(firstVis);
         List<Span> temporaryEmptySpans = null;
         Spans spans = mStyles == null ? null : mStyles.spans;
-        List<Integer> matchedPositions = new ArrayList<>();
+        var matchedPositions = new LongArrayList();
         int currentLine = mCursor.isSelected() ? -1 : mCursor.getLeftLine();
         int currentLineBgColor = mColors.getColor(EditorColorScheme.CURRENT_LINE);
         int lastPreparedLine = -1;
@@ -1544,9 +1550,12 @@ public class CodeEditor extends View implements ContentListener, StyleReceiver, 
             }
 
             // Draw matched text background
-            if (!matchedPositions.isEmpty()) {
-                for (int position : matchedPositions) {
-                    drawRowRegionBackground(canvas, paintingOffset, row, firstVisibleChar, lastVisibleChar, position, position + mSearcher.mSearchText.length(), mColors.getColor(EditorColorScheme.MATCHED_TEXT_BACKGROUND), line);
+            if (matchedPositions.size() > 0) {
+                for (int i = 0;i < matchedPositions.size();i++) {
+                    var position = matchedPositions.get(i);
+                    var start = IntPair.getFirst(position);
+                    var end = IntPair.getSecond(position);
+                    drawRowRegionBackground(canvas, paintingOffset, row, firstVisibleChar, lastVisibleChar, start, end, mColors.getColor(EditorColorScheme.MATCHED_TEXT_BACKGROUND), line);
                 }
             }
 
@@ -1693,7 +1702,14 @@ public class CodeEditor extends View implements ContentListener, StyleReceiver, 
 
                     int backgroundColorId = span.getBackgroundColorId();
                     if (backgroundColorId != 0) {
-                        drawRowRegionBackground(canvas, paintingOffset, row, firstVisibleChar, lastVisibleChar, paintStart, paintEnd, mColors.getColor(backgroundColorId), line);
+                        if (paintStart != paintEnd) {
+                            mRect.top = getRowTop(row) - getOffsetY();
+                            mRect.bottom = getRowBottom(row) - getOffsetY();
+                            mRect.left = paintingOffset;
+                            mRect.right = mRect.left + width;
+                            mPaint.setColor(mColors.getColor(backgroundColorId));
+                            canvas.drawRoundRect(mRect, getRowHeight() * 0.13f, getRowHeight() * 0.13f, mPaint);
+                        }
                     }
 
                     // Draw text
@@ -1978,19 +1994,41 @@ public class CodeEditor extends View implements ContentListener, StyleReceiver, 
      * @param line      Target line
      * @param positions Outputs start positions
      */
-    protected void computeMatchedPositions(int line, List<Integer> positions) {
+    protected void computeMatchedPositions(int line, LongArrayList positions) {
         positions.clear();
-        CharSequence pattern = mSearcher.mSearchText;
-        if (pattern == null || pattern.length() == 0) {
+        if (mSearcher.mPattern == null || mSearcher.mOptions == null) {
+            return;
+        }
+        if (mSearcher.mOptions.useRegex) {
+            if (!mSearcher.isResultValid()) {
+                return;
+            }
+            var res = mSearcher.mLastResults;
+            var lineLeft = mText.getCharIndex(line, 0);
+            var lineRight = lineLeft + mText.getColumnCount(line);
+            for (int i = 0;i < res.size();i++) {
+                var region = res.get(i);
+                var start = IntPair.getFirst(region);
+                var end = IntPair.getSecond(region);
+                var highlightStart = Math.max(start, lineLeft);
+                var highlightEnd = Math.min(end, lineRight);
+                if (highlightStart < highlightEnd) {
+                    positions.add(IntPair.pack(highlightStart - lineLeft, highlightEnd - lineLeft));
+                }
+                if (start > lineRight) {
+                    break;
+                }
+            }
             return;
         }
         ContentLine seq = mText.getLine(line);
         int index = 0;
+        var len = mSearcher.mPattern.length();
         while (index != -1) {
-            index = seq.indexOf(pattern, index);
+            index = TextUtils.indexOf(seq, mSearcher.mPattern, mSearcher.mOptions.ignoreCase, index);
             if (index != -1) {
-                positions.add(index);
-                index += pattern.length();
+                positions.add(IntPair.pack(index, index + len));
+                index += len;
             }
         }
     }
@@ -2383,6 +2421,14 @@ public class CodeEditor extends View implements ContentListener, StyleReceiver, 
     public void setEdgeEffectColor(int color) {
         mVerticalEdgeGlow.setColor(color);
         mHorizontalGlow.setColor(color);
+    }
+
+    /**
+     * Get the layout of editor
+     */
+    @UnsupportedUserUsage
+    public Layout getLayout() {
+        return mLayout;
     }
 
     /**
@@ -2900,7 +2946,13 @@ public class CodeEditor extends View implements ContentListener, StyleReceiver, 
                 begin = end;
                 end = tmp;
             }
-            mText.delete(cur.getLeftLine(), begin, cur.getLeftLine(), end);
+            if (begin == end) {
+                if (cur.getLeftLine() > 0) {
+                    mText.delete(cur.getLeftLine() - 1, mText.getColumnCount(cur.getLeftLine() - 1), cur.getLeftLine(), 0);
+                }
+            } else {
+                mText.delete(cur.getLeftLine(), begin, cur.getLeftLine(), end);
+            }
         }
     }
 
@@ -3035,8 +3087,8 @@ public class CodeEditor extends View implements ContentListener, StyleReceiver, 
             targetY = yOffset - getHeight() + getRowHeight() * 0.1f;
         }
         float charWidth = column == 0 ? 0 : measureText(mText.getLine(line), column - 1, 1, line);
-        if (xOffset < getOffsetX()) {
-            targetX = xOffset - charWidth * 0.2f;
+        if (xOffset < getOffsetX() + (mPinLineNumber ? measureTextRegionOffset() : 0)) {
+            targetX = xOffset + (mPinLineNumber ? -measureTextRegionOffset() : 0) - charWidth * 0.2f;
         }
         if (xOffset + charWidth > getOffsetX() + getWidth()) {
             targetX = xOffset + charWidth * 0.8f - getWidth();
@@ -3348,7 +3400,11 @@ public class CodeEditor extends View implements ContentListener, StyleReceiver, 
 
                     @Override
                     public boolean onQueryTextChange(String text) {
-                        getSearcher().search(text);
+                        if (text == null || text.length() == 0) {
+                            getSearcher().stopSearch();
+                            return false;
+                        }
+                        getSearcher().search(text, new EditorSearcher.SearchOptions(false, false));
                         return false;
                     }
 
@@ -3368,9 +3424,12 @@ public class CodeEditor extends View implements ContentListener, StyleReceiver, 
 
             @Override
             public boolean onActionItemClicked(final ActionMode am, MenuItem p2) {
+                if (!getSearcher().hasQuery()) {
+                    return false;
+                }
                 switch (p2.getItemId()) {
                     case 1:
-                        getSearcher().gotoLast();
+                        getSearcher().gotoPrevious();
                         break;
                     case 0:
                         getSearcher().gotoNext();
@@ -3750,11 +3809,11 @@ public class CodeEditor extends View implements ContentListener, StyleReceiver, 
                 mCompletionWindow.moveDown();
                 return;
             }
-            long pos = mCursor.getDownOf(IntPair.pack(mCursor.getLeftLine(), mCursor.getLeftColumn()));
+            long pos = mLayout.getDownPosition(mCursor.getLeftLine(), mCursor.getLeftColumn());
             setSelection(IntPair.getFirst(pos), IntPair.getSecond(pos));
         } else {
             mCompletionWindow.hide();
-            long pos = mCursor.getDownOf(getSelectingTarget().toIntPair());
+            long pos = mLayout.getDownPosition(getSelectingTarget().getLine(), getSelectingTarget().getColumn());
             setSelectionRegion(mSelectionAnchor.line, mSelectionAnchor.column, IntPair.getFirst(pos), IntPair.getSecond(pos), false);
             ensureSelectingTargetVisible();
         }
@@ -3770,11 +3829,11 @@ public class CodeEditor extends View implements ContentListener, StyleReceiver, 
                 mCompletionWindow.moveUp();
                 return;
             }
-            long pos = mCursor.getUpOf(IntPair.pack(mCursor.getLeftLine(), mCursor.getLeftColumn()));
+            long pos = mLayout.getUpPosition(mCursor.getLeftLine(), mCursor.getLeftColumn());
             setSelection(IntPair.getFirst(pos), IntPair.getSecond(pos));
         } else {
             mCompletionWindow.hide();
-            long pos = mCursor.getUpOf(getSelectingTarget().toIntPair());
+            long pos = mLayout.getUpPosition(getSelectingTarget().getLine(), getSelectingTarget().getColumn());
             setSelectionRegion(mSelectionAnchor.line, mSelectionAnchor.column, IntPair.getFirst(pos), IntPair.getSecond(pos), false);
             ensureSelectingTargetVisible();
         }
@@ -4901,7 +4960,7 @@ public class CodeEditor extends View implements ContentListener, StyleReceiver, 
         } else {
             mEventHandler.scrollBy(getOffsetX() > getScrollMaxX() ? getScrollMaxX() - getOffsetX() : 0, getOffsetY() > getScrollMaxY() ? getScrollMaxY() - getOffsetY() : 0);
         }
-        if (oldHeight > h) {
+        if (oldHeight > h && mProps.adjustToSelectionOnResize) {
             ensureSelectionVisible();
         }
     }
@@ -5129,6 +5188,10 @@ public class CodeEditor extends View implements ContentListener, StyleReceiver, 
         }
 
         void execute(Canvas canvas) {
+            // Hide cursors (API level 31)
+            if (mConnection.mImeConsumingInput) {
+                return;
+            }
             // Follow the thumb
             if (!descriptor.position.isEmpty()) {
                 if ((mEventHandler.holdInsertHandle() && handleType == SelectionHandleStyle.HANDLE_TYPE_INSERT)

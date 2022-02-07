@@ -31,7 +31,9 @@ import java.util.concurrent.locks.ReadWriteLock;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
 
 /**
- * This class saves the text content for editor and maintains line widths
+ * This class saves the text content for editor and maintains line widths.
+ * It is thread-safe by default. Use {@link #Content(CharSequence, boolean)} constructor to
+ * create a non thread-safe one.
  *
  * @author Rose
  */
@@ -51,7 +53,7 @@ public class Content implements CharSequence {
     private int nestedBatchEdit;
     private final List<ContentListener> contentListeners;
     private Indexer indexer;
-    private final UndoManager undoManager;
+    private UndoManager undoManager;
     private Cursor cursor;
     private LineRemoveListener lineListener;
     private final ReadWriteLock lock;
@@ -64,16 +66,27 @@ public class Content implements CharSequence {
     }
 
     /**
-     * This constructor will create a Content object with the given source
-     * If you give us null,it will just create a empty Content object
+     * This constructor will create a Content object with the given source.
+     * If you give us null,it will just create an empty Content object
      *
      * @param src The source of Content
      */
     public Content(CharSequence src) {
+        this(src, true);
+    }
+
+    /**
+     * Create a Content object with the given content text. Specify whether thread-safe is enabled.
+     */
+    public Content(CharSequence src, boolean threadSafe) {
         if (src == null) {
             src = "";
         }
-        lock = new ReentrantReadWriteLock();
+        if (threadSafe) {
+            lock = new ReentrantReadWriteLock();
+        } else {
+            lock = null;
+        }
         textLength = 0;
         nestedBatchEdit = 0;
         lines = new ArrayList<>(getInitialLineCapacity());
@@ -91,11 +104,21 @@ public class Content implements CharSequence {
         setUndoEnabled(true);
     }
 
+    public boolean isThreadSafe() {
+        return lock != null;
+    }
+
     private void lock(boolean write) {
+        if (lock == null) {
+            return;
+        }
         (write ? lock.writeLock() : lock.readLock()).lock();
     }
 
     private void unlock(boolean write) {
+        if (lock == null) {
+            return;
+        }
         (write ? lock.writeLock() : lock.readLock()).unlock();
     }
 
@@ -699,7 +722,7 @@ public class Content implements CharSequence {
     public boolean equals(Object anotherObject) {
         if (anotherObject instanceof Content) {
             Content content = (Content) anotherObject;
-            if (content.getLineCount() != this.getLineCount()) {
+            if (content.length() != this.length()) {
                 return false;
             }
             for (int i = 0; i < this.getLineCount(); i++) {
@@ -730,6 +753,20 @@ public class Content implements CharSequence {
         var sb = new StringBuilder();
         appendToStringBuilder(sb);
         return sb;
+    }
+
+    /**
+     * Set undo manager. You may use this to recover to a previously saved state of undo stack.
+     */
+    public void setUndoManager(UndoManager manager) {
+        this.undoManager = manager;
+    }
+
+    /**
+     * Get UndoManager instance in use
+     */
+    public UndoManager getUndoManager() {
+        return undoManager;
     }
 
     /**
@@ -859,10 +896,18 @@ public class Content implements CharSequence {
 
     /**
      * Copy text in this Content object.
-     * Returns a new Content object with the same text as this object.
+     * Returns a new thread-safe Content object with the same text as this object.
      */
     public Content copyText() {
-        var n = new Content();
+        return copyText(true);
+    }
+
+    /**
+     * Copy text in this Content object.
+     * Returns a new Content object with the same text as this object.
+     */
+    public Content copyText(boolean newContentThreadSafe) {
+        var n = new Content(null, newContentThreadSafe);
         n.lines.remove(0);
         for (int i = 0; i < getLineCount(); i++) {
             var line = lines.get(i);

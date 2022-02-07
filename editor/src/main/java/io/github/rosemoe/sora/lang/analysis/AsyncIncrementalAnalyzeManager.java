@@ -31,6 +31,7 @@ import android.os.Message;
 import androidx.annotation.NonNull;
 
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.locks.Lock;
@@ -52,6 +53,8 @@ public abstract class AsyncIncrementalAnalyzeManager<S, T> implements Incrementa
     private ContentReference ref;
     private Bundle extraArguments;
     private LooperThread thread;
+    private volatile long runCount;
+    private static int sThreadId = 0;
     private final static int MSG_BASE = 11451400;
     private final static int MSG_INIT = MSG_BASE + 1;
     private final static int MSG_MOD = MSG_BASE + 2;
@@ -72,6 +75,7 @@ public abstract class AsyncIncrementalAnalyzeManager<S, T> implements Incrementa
     @Override
     public void insert(CharPosition start, CharPosition end, CharSequence insertedText) {
         if (thread != null) {
+            increaseRunCount();
             thread.handler.sendMessage(thread.handler.obtainMessage(MSG_MOD, new TextModification(IntPair.pack(start.line, start.column), IntPair.pack(end.line, end.column), insertedText)));
             sendUpdate(thread.styles);
         }
@@ -80,6 +84,7 @@ public abstract class AsyncIncrementalAnalyzeManager<S, T> implements Incrementa
     @Override
     public void delete(CharPosition start, CharPosition end, CharSequence deletedText) {
         if (thread != null) {
+            increaseRunCount();
             thread.handler.sendMessage(thread.handler.obtainMessage(MSG_MOD, new TextModification(IntPair.pack(start.line, start.column), IntPair.pack(end.line, end.column), null)));
             sendUpdate(thread.styles);
         }
@@ -94,11 +99,31 @@ public abstract class AsyncIncrementalAnalyzeManager<S, T> implements Incrementa
                 thread.abort = true;
             }
         }
-        final var text = ref.getReference().copyText();
+        final var text = ref.getReference().copyText(false);
         text.setUndoEnabled(false);
         thread = new LooperThread(() -> thread.handler.sendMessage(thread.handler.obtainMessage(MSG_INIT, text)));
+        thread.setName("AsyncAnalyzer-" + nextThreadId());
+        increaseRunCount();
         thread.start();
         sendUpdate(null);
+    }
+
+    @Override
+    public LineTokenizeResult<S, T> getState(int line) {
+        final var thread = this.thread;
+        if (thread == Thread.currentThread()) {
+            return thread.states.get(line);
+        }
+        throw new SecurityException("Can not get state from non-analytical or abandoned thread");
+    }
+
+    private synchronized void increaseRunCount() {
+        runCount ++;
+    }
+
+    private synchronized static int nextThreadId() {
+        sThreadId++;
+        return sThreadId;
     }
 
     @Override
@@ -127,10 +152,40 @@ public abstract class AsyncIncrementalAnalyzeManager<S, T> implements Incrementa
      * Compute code blocks
      * @param text The text. can be safely accessed.
      */
-    public abstract List<CodeBlock> computeBlocks(Content text);
+    public abstract List<CodeBlock> computeBlocks(Content text, CodeBlockAnalyzeDelegate delegate);
 
     public Bundle getExtraArguments() {
         return extraArguments;
+    }
+
+    /**
+     * Helper class for analyzing code block
+     */
+    public class CodeBlockAnalyzeDelegate {
+
+        private final LooperThread thread;
+        int suppressSwitch;
+
+        CodeBlockAnalyzeDelegate(@NonNull LooperThread lp) {
+            thread = lp;
+        }
+
+        public void setSuppressSwitch(int suppressSwitch) {
+            this.suppressSwitch = suppressSwitch;
+        }
+
+        void reset() {
+            suppressSwitch = Integer.MAX_VALUE;
+        }
+
+        public boolean isCancelled() {
+            return thread.myRunCount != runCount;
+        }
+
+        public boolean isNotCancelled() {
+            return thread.myRunCount == runCount;
+        }
+
     }
 
     private class LooperThread extends Thread {
@@ -139,11 +194,13 @@ public abstract class AsyncIncrementalAnalyzeManager<S, T> implements Incrementa
         Looper looper;
         Handler handler;
         Content shadowed;
+        long myRunCount;
 
         List<LineTokenizeResult<S, T>> states = new ArrayList<>();
         Styles styles;
         LockedSpans spans;
-        private Runnable callback;
+        Runnable callback;
+        CodeBlockAnalyzeDelegate delegate = new CodeBlockAnalyzeDelegate(this);
 
         public LooperThread(Runnable callback) {
             this.callback = callback;
@@ -165,7 +222,8 @@ public abstract class AsyncIncrementalAnalyzeManager<S, T> implements Incrementa
                 states.add(result.clearSpans());
                 mdf.addLineAt(i, spans);
             }
-            styles.blocks = computeBlocks(shadowed);
+            styles.blocks = computeBlocks(shadowed, delegate);
+            styles.setSuppressSwitch(delegate.suppressSwitch);
             tryUpdate();
         }
 
@@ -179,6 +237,8 @@ public abstract class AsyncIncrementalAnalyzeManager<S, T> implements Incrementa
                 public void handleMessage(@NonNull Message msg) {
                     super.handleMessage(msg);
                     try {
+                        myRunCount = runCount;
+                        delegate.reset();
                         switch (msg.what) {
                             case MSG_INIT:
                                 shadowed = (Content) msg.obj;
@@ -245,7 +305,8 @@ public abstract class AsyncIncrementalAnalyzeManager<S, T> implements Incrementa
                                         }
                                     }
                                 }
-                                styles.blocks = computeBlocks(shadowed);
+                                styles.blocks = computeBlocks(shadowed, delegate);
+                                styles.setSuppressSwitch(delegate.suppressSwitch);
                                 tryUpdate();
                                 break;
                             case MSG_EXIT:
@@ -396,9 +457,7 @@ public abstract class AsyncIncrementalAnalyzeManager<S, T> implements Incrementa
                     }
                     if (obj != null && obj.lock.tryLock()) {
                         try {
-                            for (var span : obj.spans) {
-                                spans.add(span.copy());
-                            }
+                            return Collections.unmodifiableList(obj.spans);
                         } finally {
                             obj.lock.unlock();
                         }

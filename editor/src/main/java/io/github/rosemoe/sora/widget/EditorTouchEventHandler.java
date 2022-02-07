@@ -51,10 +51,7 @@ import io.github.rosemoe.sora.widget.style.SelectionHandleStyle;
 public final class EditorTouchEventHandler implements GestureDetector.OnGestureListener, GestureDetector.OnDoubleTapListener, ScaleGestureDetector.OnScaleGestureListener {
 
     private final static int HIDE_DELAY = 3000;
-    private final static int SELECTION_HANDLE_RESIZE_DELAY = 180;
     private final static int HIDE_DELAY_HANDLE = 5000;
-    private static final long INTERACTION_END_DELAY = 250;
-    private static final String TAG = "EditorTouchEventHandler";
     private final CodeEditor mEditor;
     private final OverScroller mScroller;
     boolean topOrBottom; //true for bottom
@@ -90,19 +87,9 @@ public final class EditorTouchEventHandler implements GestureDetector.OnGestureL
     public EditorTouchEventHandler(CodeEditor editor) {
         mEditor = editor;
         mScroller = new OverScroller(editor.getContext());
-        maxSize = TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_SP, 32, Resources.getSystem().getDisplayMetrics());
-        minSize = TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_SP, 6, Resources.getSystem().getDisplayMetrics());
+        maxSize = TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_SP, 26, Resources.getSystem().getDisplayMetrics());
+        minSize = TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_SP, 8, Resources.getSystem().getDisplayMetrics());
         mMagnifier = new Magnifier(editor);
-    }
-
-    /**
-     * Whether this character is a part of word
-     *
-     * @param ch Character to check
-     * @return Whether a part of word
-     */
-    private static boolean isIdentifierPart(char ch) {
-        return Character.isJavaIdentifierPart(ch);
     }
 
     public boolean hasAnyHeldHandle() {
@@ -478,7 +465,6 @@ public final class EditorTouchEventHandler implements GestureDetector.OnGestureL
 
     @Override
     public boolean onSingleTapUp(MotionEvent e) {
-        mEditor.showSoftInput();
         mScroller.forceFinished(true);
         long res = mEditor.getPointPositionOnScreen(e.getX(), e.getY());
         int line = IntPair.getFirst(res);
@@ -487,6 +473,7 @@ public final class EditorTouchEventHandler implements GestureDetector.OnGestureL
         if (mEditor.dispatchEvent(new ClickEvent(mEditor, mEditor.getText().getIndexer().getCharPosition(line, column), e))) {
             return true;
         }
+        mEditor.showSoftInput();
         notifyLater();
         mEditor.setSelection(line, column, SelectionChangeEvent.CAUSE_TAP);
         mEditor.hideAutoCompleteWindow();
@@ -521,13 +508,13 @@ public final class EditorTouchEventHandler implements GestureDetector.OnGestureL
 
     @Override
     public void onLongPress(MotionEvent e) {
-        if (mEditor.getCursor().isSelected() || e.getPointerCount() != 1) {
-            return;
-        }
         long res = mEditor.getPointPositionOnScreen(e.getX(), e.getY());
         int line = IntPair.getFirst(res);
         int column = IntPair.getSecond(res);
         if (mEditor.dispatchEvent(new LongPressEvent(mEditor, mEditor.getText().getIndexer().getCharPosition(line, column), e))) {
+            return;
+        }
+        if (mEditor.getCursor().isSelected() || e.getPointerCount() != 1) {
             return;
         }
         selectWord(line, column);
@@ -632,7 +619,7 @@ public final class EditorTouchEventHandler implements GestureDetector.OnGestureL
         if (mEditor.isScalable()) {
             float newSize = mEditor.getTextSizePx() * detector.getScaleFactor();
             if (newSize < minSize || newSize > maxSize) {
-                return false;
+                return true;
             }
             float focusX = detector.getFocusX();
             float focusY = detector.getFocusY();
@@ -683,13 +670,13 @@ public final class EditorTouchEventHandler implements GestureDetector.OnGestureL
 
     @Override
     public boolean onDoubleTap(MotionEvent e) {
-        if (mEditor.getCursor().isSelected() || e.getPointerCount() != 1) {
-            return true;
-        }
         long res = mEditor.getPointPositionOnScreen(e.getX(), e.getY());
         int line = IntPair.getFirst(res);
         int column = IntPair.getSecond(res);
         if (mEditor.dispatchEvent(new DoubleClickEvent(mEditor, mEditor.getText().getIndexer().getCharPosition(line, column), e))) {
+            return true;
+        }
+        if (mEditor.getCursor().isSelected() || e.getPointerCount() != 1) {
             return true;
         }
         selectWord(line, column);
@@ -733,7 +720,7 @@ public final class EditorTouchEventHandler implements GestureDetector.OnGestureL
          * @param e Event sent by EventHandler
          */
         public void applyPosition(MotionEvent e) {
-            SelectionHandleStyle.HandleDescriptor descriptor = null;
+            SelectionHandleStyle.HandleDescriptor descriptor;
             switch (type) {
                 case LEFT:
                     descriptor = mEditor.getLeftHandleDescriptor();

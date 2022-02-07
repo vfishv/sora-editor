@@ -47,11 +47,14 @@ import io.github.rosemoe.sora.langs.textmate.theme.TextMateColorScheme
 import io.github.rosemoe.sora.textmate.core.internal.theme.reader.ThemeReader
 import io.github.rosemoe.sora.utils.CrashHandler
 import io.github.rosemoe.sora.widget.CodeEditor
+import io.github.rosemoe.sora.widget.EditorSearcher
 import io.github.rosemoe.sora.widget.SymbolInputView
 import io.github.rosemoe.sora.widget.component.Magnifier
 import io.github.rosemoe.sora.widget.schemes.*
 import io.github.rosemoe.sorakt.subscribeEvent
 import java.io.*
+import java.util.regex.Pattern
+import java.util.regex.PatternSyntaxException
 
 class MainActivity : AppCompatActivity() {
     private lateinit var binding: ActivityMainBinding
@@ -61,7 +64,6 @@ class MainActivity : AppCompatActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         CrashHandler.INSTANCE.init(this)
-        setContentView(R.layout.activity_main)
         binding = ActivityMainBinding.inflate(layoutInflater)
         setContentView(binding.root)
         val inputView = binding.symbolInput
@@ -88,7 +90,18 @@ class MainActivity : AppCompatActivity() {
             override fun beforeTextChanged(charSequence: CharSequence, i: Int, i1: Int, i2: Int) {}
             override fun onTextChanged(charSequence: CharSequence, i: Int, i1: Int, i2: Int) {}
             override fun afterTextChanged(editable: Editable) {
-                binding.editor.searcher.search(editable.toString())
+                if (editable.isNotEmpty()) {
+                    try {
+                        binding.editor.searcher.search(
+                            editable.toString(),
+                            EditorSearcher.SearchOptions(true, true)
+                        )
+                    } catch (e: PatternSyntaxException) {
+                        // Regex error
+                    }
+                } else {
+                    binding.editor.searcher.stopSearch()
+                }
             }
         })
         binding.editor.apply {
@@ -97,9 +110,9 @@ class MainActivity : AppCompatActivity() {
             nonPrintablePaintingFlags =
                 CodeEditor.FLAG_DRAW_WHITESPACE_LEADING or CodeEditor.FLAG_DRAW_LINE_SEPARATOR or CodeEditor.FLAG_DRAW_WHITESPACE_IN_SELECTION
             // Update display dynamically
-            binding.editor.subscribeEvent<SelectionChangeEvent> { _, _ -> updatePositionText() }
-            binding.editor.subscribeEvent<ContentChangeEvent> { _, _ ->
-                binding.editor.postDelayed(
+            subscribeEvent<SelectionChangeEvent> { _, _ -> updatePositionText() }
+            subscribeEvent<ContentChangeEvent> { _, _ ->
+                postDelayed(
                     ::updateBtnState,
                     50
                 )
@@ -439,7 +452,7 @@ class MainActivity : AppCompatActivity() {
 
     fun gotoLast(view: View?) {
         try {
-            binding.editor.searcher.gotoLast()
+            binding.editor.searcher.gotoPrevious()
         } catch (e: IllegalStateException) {
             e.printStackTrace()
         }
