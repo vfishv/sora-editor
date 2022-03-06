@@ -21,28 +21,23 @@
  *     Please contact Rosemoe by email 2073412493@qq.com if you need
  *     additional information or have any questions
  */
-@SuppressWarnings("unused")
-public final class Versions {
+package io.github.rosemoe.sora.event;
 
-    // Project versions
-    public final static String versionName = "0.10.5";
-    public final static int versionCode = 40;
+/**
+ * Define available intercept targets. You may intercept one or more targets of the given event.
+ *
+ * @author Rosemoe
+ */
+public interface InterceptTarget {
 
-    // Platform & Tool versions
-    public final static String buildToolsVersion = "32.0.0";
-    public final static int compileSdkVersion = 32;
-    public final static int minSdkVersion = 21;
-    public final static int targetSdkVersion = 32;
+    /**
+     * Registered receivers in the event dispatching graph
+     */
+    int TARGET_RECEIVERS = 1;
 
-    // Dependency versions
-    public final static String antlrVersion = "4.9.2";
+    /**
+     * Editor built-in behavior
+     */
+    int TARGET_EDITOR = 1 << 1;
 
-
-    // TextMate Dependency versions(from tm4e 0.4.2)
-    public final static String gsonVersion = "2.9.0";
-    public final static String jcodingsVersion = "1.0.18";
-    public final static String joniVersion = "2.1.11";
-    public final static String batikCssVersion = "1.14";
-    public final static String batikUtilVersion = "1.14";
-    public final static String xercesImplVersion = "2.12.1";
 }

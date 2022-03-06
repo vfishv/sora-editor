@@ -28,11 +28,14 @@ Download the newest sources from [Releases](https://github.com/Rosemoe/CodeEdito
 - [x] Show non-printable characters
 - [x] Error/Warning/Typo/Deprecated indicators
 - [x] Text magnifier
-- [x] Incremental highlight Analysis (for language-textmate)
+- [x] Incremental highlight Analysis 
 - [x] Event System
 ## Screenshots
-![Wordwrap](/images/wordwrap.png)
-<img src="/images/curlylines.jpg" alt="ErrorIndicator" width="40%" align="bottom" />
+<div style="overflow: hidden">
+<img src="/images/general.jpg" alt="GeneralAppearance" width="40%" align="bottom" />
+<img src="/images/problem_indicators.jpg" alt="ProblemIndicator" width="40%" align="bottom" />
+</div>
+
 ## Get started
 Add to your app's dependencies:
 ```Gradle
