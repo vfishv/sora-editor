@@ -28,12 +28,12 @@ plugins {
 }
 
 android {
-    compileSdkVersion Versions.compileSdkVersion
+    compileSdk Versions.compileSdkVersion
     buildToolsVersion Versions.buildToolsVersion
     defaultConfig {
         applicationId 'io.github.rosemoe.sora.app'
-        minSdkVersion Versions.minSdkVersion
-        targetSdkVersion Versions.targetSdkVersion
+        minSdk Versions.minSdkVersion
+        targetSdk Versions.targetSdkVersion
         versionCode Versions.versionCode
         versionName Versions.versionName
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
@@ -41,6 +41,7 @@ android {
     buildTypes {
         release {
             minifyEnabled false
+            signingConfig signingConfigs.debug
             proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
         }
     }
@@ -49,10 +50,12 @@ android {
         sourceCompatibility JavaVersion.VERSION_11
         targetCompatibility JavaVersion.VERSION_11
     }
+    aaptOptions {
+        additionalParameters =["--warn-manifest-validation"]
+    }
     viewBinding {
         enabled = true
     }
-
 
     packagingOptions {
         pickFirst 'license/README.dom.txt'
@@ -65,6 +68,7 @@ android {
 
 dependencies {
     implementation fileTree(dir: 'libs', include: ['*.jar'])
+    implementation 'androidx.constraintlayout:constraintlayout:2.1.3'
 
     // Desugar
     coreLibraryDesugaring 'com.android.tools:desugar_jdk_libs:1.1.5'

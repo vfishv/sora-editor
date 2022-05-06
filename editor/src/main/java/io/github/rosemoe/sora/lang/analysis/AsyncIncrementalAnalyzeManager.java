@@ -27,6 +27,7 @@ import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
 import android.os.Message;
+import android.util.Log;
 
 import androidx.annotation.NonNull;
 
@@ -218,8 +219,9 @@ public abstract class AsyncIncrementalAnalyzeManager<S, T> implements Incrementa
             styles = new Styles(spans = new LockedSpans());
             S state = getInitialState();
             var mdf = spans.modify();
-            for (int i = 0;i < ref.getLineCount();i++) {
-                var result = tokenizeLine(ref.getLine(i), state);
+            for (int i = 0;i < shadowed.getLineCount();i++) {
+                var line = shadowed.getLine(i);
+                var result = tokenizeLine(line, state);
                 state = result.state;
                 var spans = result.spans != null ? result. spans :generateSpansForLine(result);
                 states.add(result.clearSpans());
@@ -317,7 +319,7 @@ public abstract class AsyncIncrementalAnalyzeManager<S, T> implements Incrementa
                                 break;
                         }
                     } catch (Exception e) {
-                        e.printStackTrace();
+                        Log.w("AsyncAnalysis", "Thread " + Thread.currentThread().getName() + " failed", e);
                     }
                 }
 
@@ -409,7 +411,7 @@ public abstract class AsyncIncrementalAnalyzeManager<S, T> implements Incrementa
                     }
                     var locked = false;
                     try {
-                        locked = lock.tryLock(1, TimeUnit.MILLISECONDS);
+                        locked = lock.tryLock(100, TimeUnit.MICROSECONDS);
                     } catch (InterruptedException e) {
                         e.printStackTrace();
                     }
@@ -485,7 +487,13 @@ public abstract class AsyncIncrementalAnalyzeManager<S, T> implements Incrementa
                         list.add(Span.obtain(0, EditorColorScheme.TEXT_NORMAL));
                         lines.add(new Line(list));
                     }
-                    lines.get(line).spans = spans;
+                    var obj = lines.get(line);
+                    obj.lock.lock();
+                    try {
+                        obj.spans = spans;
+                    } finally {
+                        obj.lock.unlock();
+                    }
                 } finally {
                     lock.unlock();
                 }

@@ -38,23 +38,27 @@ public class Paint extends android.graphics.Paint {
         spaceWidth = measureText(" ");
     }
 
+    public void onAttributeUpdate() {
+        spaceWidth = measureText(" ");
+    }
+
     public float getSpaceWidth() {
         return spaceWidth;
     }
 
     public void setTypefaceWrapped(Typeface typeface) {
         super.setTypeface(typeface);
-        spaceWidth = measureText(" ");
+        onAttributeUpdate();
     }
 
     public void setTextSizeWrapped(float textSize) {
         super.setTextSize(textSize);
-        spaceWidth = measureText(" ");
+        onAttributeUpdate();
     }
 
     public void setFontFeatureSettingsWrapped(String settings) {
         super.setFontFeatureSettings(settings);
-        spaceWidth = measureText(" ");
+        onAttributeUpdate();
     }
 
     /**

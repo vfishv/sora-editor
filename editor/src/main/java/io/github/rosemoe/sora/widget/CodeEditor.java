@@ -103,6 +103,7 @@ import io.github.rosemoe.sora.text.FormatThread;
 import io.github.rosemoe.sora.text.LineRemoveListener;
 import io.github.rosemoe.sora.text.TextLayoutHelper;
 import io.github.rosemoe.sora.text.TextUtils;
+import io.github.rosemoe.sora.util.Floats;
 import io.github.rosemoe.sora.util.IntPair;
 import io.github.rosemoe.sora.util.LongArrayList;
 import io.github.rosemoe.sora.util.TemporaryFloatBuffer;
@@ -266,6 +267,7 @@ public class CodeEditor extends View implements ContentListener, StyleReceiver, 
     private boolean mFirstLineNumberAlwaysVisible;
     private boolean mLigatureEnabled;
     private boolean mLastCursorState;
+    private boolean mStickyTextSelection;
     private SelectionHandleStyle.HandleDescriptor mLeftHandle;
     private SelectionHandleStyle.HandleDescriptor mRightHandle;
     private SelectionHandleStyle.HandleDescriptor mInsertHandle;
@@ -287,7 +289,7 @@ public class CodeEditor extends View implements ContentListener, StyleReceiver, 
     private ScaleGestureDetector mScaleDetector;
     EditorInputConnection mConnection;
     private CursorAnchorInfo.Builder mAnchorInfoBuilder;
-    private MaterialEdgeEffect mVerticalEdgeGlow;
+    private MaterialEdgeEffect mVerticalGlow;
     private MaterialEdgeEffect mHorizontalGlow;
     private ExtractedTextRequest mExtracting;
     private FormatThread mFormatThread;
@@ -493,7 +495,7 @@ public class CodeEditor extends View implements ContentListener, StyleReceiver, 
         mMatrix = new Matrix();
         mHandleStyle = new HandleStyleSideDrop(getContext());
         mSearcher = new EditorSearcher(this);
-        mCursorAnimator = new CursorAnimator(this);
+        mCursorAnimator = new MoveCursorAnimator(this);
         setCursorBlinkPeriod(DEFAULT_CURSOR_BLINK_PERIOD);
         mAnchorInfoBuilder = new CursorAnchorInfo.Builder();
 
@@ -521,7 +523,7 @@ public class CodeEditor extends View implements ContentListener, StyleReceiver, 
         setFocusableInTouchMode(true);
         mConnection = new EditorInputConnection(this);
         mCompletionWindow = new EditorAutoCompletion(this);
-        mVerticalEdgeGlow = new MaterialEdgeEffect();
+        mVerticalGlow = new MaterialEdgeEffect();
         mHorizontalGlow = new MaterialEdgeEffect();
         mTextActionWindow = new EditorTextActionWindow(this);
         setEditorLanguage(null);
@@ -548,6 +550,9 @@ public class CodeEditor extends View implements ContentListener, StyleReceiver, 
         if (getContext() instanceof ContextThemeWrapper) {
             setEdgeEffectColor(ThemeUtils.getColorPrimary((ContextThemeWrapper) getContext()));
         }
+
+        // Config scale detector
+        mScaleDetector.setQuickScaleEnabled(false);
     }
 
     /**
@@ -672,7 +677,7 @@ public class CodeEditor extends View implements ContentListener, StyleReceiver, 
         }
     }
 
-    public CursorBlink getCursorBlink() {
+    protected CursorBlink getCursorBlink() {
         return mCursorBlink;
     }
 
@@ -755,6 +760,22 @@ public class CodeEditor extends View implements ContentListener, StyleReceiver, 
             mCursorPosition = findCursorBlock();
         }
         invalidate();
+    }
+
+    /**
+     * Returns whether the cursor should stick to the text row while selecting the text
+     * @see CodeEditor#setStickyTextSelection(boolean)
+     */
+    public boolean isStickyTextSelection() {
+        return mStickyTextSelection;
+    }
+
+    /**
+     * Whether the cursor should stick to the text row while selecting the text.
+     * @param stickySelection value
+     */
+    public void setStickyTextSelection(boolean stickySelection) {
+        this.mStickyTextSelection = stickySelection;
     }
 
     /**
@@ -878,6 +899,10 @@ public class CodeEditor extends View implements ContentListener, StyleReceiver, 
             mCursorAnimator.cancel();
         }
         mCursorAnimation = enabled;
+    }
+
+    public void setCursorAnimator(CursorAnimator cursorAnimator) {
+        mCursorAnimator = cursorAnimator;
     }
 
     public CursorAnimator getCursorAnimator() {
@@ -1063,21 +1088,16 @@ public class CodeEditor extends View implements ContentListener, StyleReceiver, 
     void buildMeasureCacheForLines(int startLine, int endLine, long timestamp) {
         var text = mText;
         while (startLine <= endLine && startLine < text.getLineCount()) {
-            ContentLine line = text.getLine(startLine);
-            // Do not create cache for long lines
-            if (line.length() <= 256) {
-                if (line.timestamp < timestamp) {
-                    var gtr = GraphicTextRow.obtain();
-                    if (line.widthCache == null) {
-                        line.widthCache = obtainFloatArray(Math.max(line.length(), 128));
-                    }
-                    gtr.set(line, 0, line.length(), getTabWidth(), getSpansForLine(startLine), mPainter.getPaint());
-                    gtr.buildMeasureCache();
-                    GraphicTextRow.recycle(gtr);
-                    line.timestamp = timestamp;
+            var line = text.getLine(startLine);
+            if (line.timestamp < timestamp) {
+                var gtr = GraphicTextRow.obtain();
+                if (line.widthCache == null) {
+                    line.widthCache = obtainFloatArray(Math.max(line.length(), 128));
                 }
-            } else {
-                line.widthCache = null;
+                gtr.set(line, 0, line.length(), getTabWidth(), getSpansForLine(startLine), mPainter.getPaint());
+                gtr.buildMeasureCache();
+                GraphicTextRow.recycle(gtr);
+                line.timestamp = timestamp;
             }
             startLine++;
         }
@@ -1134,9 +1154,9 @@ public class CodeEditor extends View implements ContentListener, StyleReceiver, 
      *
      * @param line The line to search
      */
-    protected long findLeadingAndTrailingWhitespacePos(int line) {
-        var buffer = mText.getLine(line).value;
-        int column = mText.getColumnCount(line);
+    protected long findLeadingAndTrailingWhitespacePos(ContentLine line) {
+        var buffer = line.value;
+        int column = line.length();
         int leading = 0;
         int trailing = column;
         while (leading < column && isWhitespace(buffer[leading])) {
@@ -1176,7 +1196,7 @@ public class CodeEditor extends View implements ContentListener, StyleReceiver, 
             var res = mSearcher.mLastResults;
             var lineLeft = mText.getCharIndex(line, 0);
             var lineRight = lineLeft + mText.getColumnCount(line);
-            for (int i = 0;i < res.size();i++) {
+            for (int i = 0; i < res.size(); i++) {
                 var region = res.get(i);
                 var start = IntPair.getFirst(region);
                 var end = IntPair.getSecond(region);
@@ -1210,7 +1230,7 @@ public class CodeEditor extends View implements ContentListener, StyleReceiver, 
      * @return The color of EdgeEffect.
      */
     public int getEdgeEffectColor() {
-        return mVerticalEdgeGlow.getColor();
+        return mVerticalGlow.getColor();
     }
 
     /**
@@ -1219,7 +1239,7 @@ public class CodeEditor extends View implements ContentListener, StyleReceiver, 
      * @param color The color of EdgeEffect
      */
     public void setEdgeEffectColor(int color) {
-        mVerticalEdgeGlow.setColor(color);
+        mVerticalGlow.setColor(color);
         mHorizontalGlow.setColor(color);
     }
 
@@ -1237,7 +1257,7 @@ public class CodeEditor extends View implements ContentListener, StyleReceiver, 
      * @return EdgeEffect
      */
     protected MaterialEdgeEffect getVerticalEdgeEffect() {
-        return mVerticalEdgeGlow;
+        return mVerticalGlow;
     }
 
     /**
@@ -1300,6 +1320,13 @@ public class CodeEditor extends View implements ContentListener, StyleReceiver, 
     }
 
     /**
+     * @see #findCursorBlock()
+     */
+    public int getCurrentCursorBlock() {
+        return mCursorPosition;
+    }
+
+    /**
      * Find the first code block that maybe seen on screen
      * Because the code blocks is sorted by its end line position
      * we can use binary search to quicken this process in order to decrease
@@ -1341,7 +1368,11 @@ public class CodeEditor extends View implements ContentListener, StyleReceiver, 
     @UnsupportedUserUsage
     public float measureText(ContentLine text, int index, int count, int line) {
         var gtr = GraphicTextRow.obtain();
-        gtr.set(text, 0, text.length(), mTabWidth, getSpansForLine(line), mPainter.getPaint());
+        List<Span> spans = null;
+        if (text.widthCache == null) {
+            spans = getSpansForLine(line);
+        }
+        gtr.set(text, 0, text.length(), mTabWidth, spans, mPainter.getPaint());
         var res = gtr.measureText(index, index + count);
         GraphicTextRow.recycle(gtr);
         return res;
@@ -1407,11 +1438,11 @@ public class CodeEditor extends View implements ContentListener, StyleReceiver, 
         if (start >= end) {
             return new float[]{end, 0};
         }
-        var gtr = GraphicTextRow.obtain();
-        gtr.set(line, contextStart, end, mTabWidth, getSpansForLine(lineNumber), mPainter.getPaint());
         if (line.widthCache != null && line.timestamp < mPainter.getTimestamp()) {
             buildMeasureCacheForLines(lineNumber, lineNumber, mPainter.getTimestamp());
         }
+        var gtr = GraphicTextRow.obtain();
+        gtr.set(line, contextStart, end, mTabWidth, line.widthCache == null ? getSpansForLine(lineNumber) : null, mPainter.getPaint());
         var res = gtr.findOffsetByAdvance(start, target);
         GraphicTextRow.recycle(gtr);
         return res;
@@ -1691,7 +1722,7 @@ public class CodeEditor extends View implements ContentListener, StyleReceiver, 
 
     /**
      * Sets non-printable painting flags.
-     * Specify where they should be drawn.
+     * Specify where they should be drawn and some other properties.
      * <p>
      * Flags can be mixed.
      *
@@ -1763,13 +1794,14 @@ public class CodeEditor extends View implements ContentListener, StyleReceiver, 
         targetX = Math.max(0, Math.min(getScrollMaxX(), targetX));
         targetY = Math.max(0, Math.min(getScrollMaxY(), targetY));
 
-        if (targetY == getOffsetY() && targetX == getOffsetX()) {
+        if (Floats.withinDelta(targetX, getOffsetX(), 1f) && Floats.withinDelta(targetY, getOffsetY(), 1f)) {
             invalidate();
             return;
         }
 
         boolean animation = System.currentTimeMillis() - mLastMakeVisible >= 100;
         mLastMakeVisible = System.currentTimeMillis();
+
         if (animation) {
             getScroller().forceFinished(true);
             getScroller().startScroll(getOffsetX(), getOffsetY(), (int) (targetX - getOffsetX()), (int) (targetY - getOffsetY()));
@@ -1897,6 +1929,28 @@ public class CodeEditor extends View implements ContentListener, StyleReceiver, 
      * @return Whether the format task is scheduled
      */
     public synchronized boolean formatCodeAsync() {
+        if (mFormatThread != null) {
+            return false;
+        }
+        mFormatThread = new FormatThread(mText, mLanguage, this);
+        mFormatThread.start();
+        return true;
+    }
+
+    /**
+     * Format text in the given region.
+     * <p>
+     * Note: Make sure the given positions are valid (line, column and index). Typically, you should
+     * obtain a position by an object of {@link io.github.rosemoe.sora.text.Indexer}
+     *
+     * @param start Start position created by Indexer
+     * @param end   End position created by Indexer
+     * @return Whether the format task is scheduled
+     */
+    public synchronized boolean formatCodeAsync(CharPosition start, CharPosition end) {
+        if (start.index > end.index) {
+            throw new IllegalArgumentException("start > end");
+        }
         if (mFormatThread != null) {
             return false;
         }
@@ -2111,11 +2165,11 @@ public class CodeEditor extends View implements ContentListener, StyleReceiver, 
                                 .setNegativeButton(R.string.cancel, null)
                                 .setPositiveButton(R.string.replace, (dialog, which) -> {
                                     if (replaceAll) {
-                                        getSearcher().replaceAll(et.getText().toString());
+                                        getSearcher().replaceAll(et.getText().toString(), am::finish);
                                     } else {
                                         getSearcher().replaceThis(et.getText().toString());
+                                        am.finish();
                                     }
-                                    am.finish();
                                     dialog.dismiss();
                                 })
                                 .show();
@@ -2215,7 +2269,41 @@ public class CodeEditor extends View implements ContentListener, StyleReceiver, 
      * @param typefaceText New typeface
      */
     public void setTypefaceText(Typeface typefaceText) {
-       mPainter.setTypefaceText(typefaceText);
+        mPainter.setTypefaceText(typefaceText);
+    }
+
+    /**
+     * Set text scale x of Paint
+     *
+     * @see Paint#setTextScaleX(float)
+     * @see #getTextScaleX()
+     */
+    public void setTextScaleX(float textScaleX) {
+        mPainter.setTextScaleX(textScaleX);
+    }
+
+    /**
+     * @see #setTextScaleX(float)
+     */
+    public float getTextScaleX() {
+        return mPainter.getPaint().getTextScaleX();
+    }
+
+    /**
+     * Set letter spacing of Paint
+     *
+     * @see Paint#setLetterSpacing(float)
+     * @see #getTextLetterSpacing()
+     */
+    public void setTextLetterSpacing(float textLetterSpacing) {
+        mPainter.setLetterSpacing(textLetterSpacing);
+    }
+
+    /**
+     * @see #setTextLetterSpacing(float)
+     */
+    public float getTextLetterSpacing() {
+        return mPainter.getPaint().getLetterSpacing();
     }
 
     /**
@@ -2346,7 +2434,8 @@ public class CodeEditor extends View implements ContentListener, StyleReceiver, 
      * @return height of single row
      */
     public int getRowHeight() {
-        return mPainter.getTextMetrics().descent - mPainter.getTextMetrics().ascent;
+        var metrics = mPainter.getTextMetrics();
+        return metrics.descent - metrics.ascent;
     }
 
     /**
@@ -2629,7 +2718,8 @@ public class CodeEditor extends View implements ContentListener, StyleReceiver, 
         updateCursor();
         mPainter.invalidateInCursor();
         if (!mEventHandler.hasAnyHeldHandle()) {
-            mCursorAnimator.markEndPosAndStart();
+            mCursorAnimator.markEndPos();
+            mCursorAnimator.start();
         }
         if (makeItVisible) {
             ensurePositionVisible(line, column);
@@ -2848,10 +2938,10 @@ public class CodeEditor extends View implements ContentListener, StyleReceiver, 
     /**
      * Sets the text to be displayed.
      *
-     * @param text           the new text you want to display
+     * @param text               the new text you want to display
      * @param reuseContentObject If the given {@code text} is an instance of {@link Content}, reuse it.
-     * @param extraArguments Extra arguments for the document. This {@link Bundle} object is passed
-     *                       to all languages and plugins in editor.
+     * @param extraArguments     Extra arguments for the document. This {@link Bundle} object is passed
+     *                           to all languages and plugins in editor.
      */
     public void setText(@Nullable CharSequence text, boolean reuseContentObject, @Nullable Bundle extraArguments) {
         if (text == null) {
@@ -2874,6 +2964,7 @@ public class CodeEditor extends View implements ContentListener, StyleReceiver, 
         mText.addContentListener(this);
         mText.setUndoEnabled(mUndoEnabled);
         mText.setLineListener(this);
+        mPainter.notifyFullTextUpdate();
 
         if (mLanguage != null) {
             mLanguage.getAnalyzeManager().reset(new ContentReference(mText), mExtraArguments);
@@ -3175,12 +3266,21 @@ public class CodeEditor extends View implements ContentListener, StyleReceiver, 
      * Recommend to call if the activity is to destroy.
      */
     public void release() {
-        mCompletionWindow.cancelCompletion();
+        hideEditorWindows();
         if (mLanguage != null) {
             mLanguage.getAnalyzeManager().destroy();
             mLanguage.destroy();
             mLanguage = new EmptyLanguage();
         }
+    }
+
+    /**
+     * Hide all built-in windows of the editor
+     */
+    public void hideEditorWindows() {
+        mCompletionWindow.cancelCompletion();
+        mTextActionWindow.dismiss();
+        mEventHandler.mMagnifier.dismiss();
     }
 
     //-------------------------------------------------------------------------------
@@ -3232,6 +3332,11 @@ public class CodeEditor extends View implements ContentListener, StyleReceiver, 
      */
     protected void onSelectionChanged(int cause) {
         dispatchEvent(new SelectionChangeEvent(this, cause));
+    }
+
+    protected void releaseEdgeEffects() {
+        mHorizontalGlow.onRelease();
+        mVerticalGlow.onRelease();
     }
 
     //-------------------------------------------------------------------------------
@@ -3352,13 +3457,12 @@ public class CodeEditor extends View implements ContentListener, StyleReceiver, 
         boolean res = mEventHandler.onTouchEvent(event);
         boolean handling = mEventHandler.handlingMotions();
         boolean res2 = false;
-        boolean res3 = false;
+        boolean res3 = mScaleDetector.onTouchEvent(event);
         if (!handling && !handlingBefore) {
             res2 = mBasicDetector.onTouchEvent(event);
-            res3 = mScaleDetector.onTouchEvent(event);
         }
         if (event.getAction() == MotionEvent.ACTION_UP) {
-            mVerticalEdgeGlow.onRelease();
+            mVerticalGlow.onRelease();
             mHorizontalGlow.onRelease();
         }
         return (res3 || res2 || res);
@@ -3644,6 +3748,8 @@ public class CodeEditor extends View implements ContentListener, StyleReceiver, 
         } else {
             mEventHandler.scrollBy(getOffsetX() > getScrollMaxX() ? getScrollMaxX() - getOffsetX() : 0, getOffsetY() > getScrollMaxY() ? getScrollMaxY() - getOffsetY() : 0);
         }
+        verticalAbsorb = false;
+        horizontalAbsorb = false;
         if (oldHeight > h && mProps.adjustToSelectionOnResize) {
             ensureSelectionVisible();
         }
@@ -3665,10 +3771,42 @@ public class CodeEditor extends View implements ContentListener, StyleReceiver, 
         removeCallbacks(mCursorBlink);
     }
 
+    private float scrollerFinalX;
+    private float scrollerFinalY;
+    private boolean verticalAbsorb;
+    private boolean horizontalAbsorb;
+
     @Override
     public void computeScroll() {
-        if (mEventHandler.getScroller().computeScrollOffset()) {
-            invalidate();
+        var scroller = mEventHandler.getScroller();
+        if (scroller.computeScrollOffset()) {
+            if (!scroller.isFinished() && (scroller.getStartX() != scroller.getFinalX() || scroller.getStartY() != scroller.getFinalY())) {
+                scrollerFinalX = scroller.getFinalX();
+                scrollerFinalY = scroller.getFinalY();
+                horizontalAbsorb = Math.abs(scroller.getStartX() - scroller.getFinalX()) > getDpUnit() * 5;
+                verticalAbsorb = Math.abs(scroller.getStartY() - scroller.getFinalY()) > getDpUnit() * 5;
+            }
+            if (scroller.getCurrX() <= 0 && scrollerFinalX <= 0 && mHorizontalGlow.isFinished() && horizontalAbsorb) {
+                mHorizontalGlow.onAbsorb((int) scroller.getCurrVelocity());
+                mEventHandler.leftOrRight = false;
+            } else {
+                var max = getScrollMaxX();
+                if (scroller.getCurrX() >= max && scrollerFinalX >= max && mHorizontalGlow.isFinished() && horizontalAbsorb) {
+                    mHorizontalGlow.onAbsorb((int) scroller.getCurrVelocity());
+                    mEventHandler.leftOrRight = true;
+                }
+            }
+            if (scroller.getCurrY() <= 0 && scrollerFinalY <= 0 && mVerticalGlow.isFinished() && verticalAbsorb) {
+                mVerticalGlow.onAbsorb((int) scroller.getCurrVelocity());
+                mEventHandler.topOrBottom = false;
+            } else {
+                var max = getScrollMaxY();
+                if (scroller.getCurrY() >= max && scrollerFinalY >= max && mVerticalGlow.isFinished() && verticalAbsorb) {
+                    mVerticalGlow.onAbsorb((int) scroller.getCurrVelocity());
+                    mEventHandler.topOrBottom = true;
+                }
+            }
+            postInvalidateOnAnimation();
         }
     }
 
@@ -3729,7 +3867,8 @@ public class CodeEditor extends View implements ContentListener, StyleReceiver, 
         mEventHandler.hideInsertHandle();
         onSelectionChanged(SelectionChangeEvent.CAUSE_TEXT_MODIFICATION);
         if (!mCursor.isSelected()) {
-            mCursorAnimator.markEndPosAndStart();
+            mCursorAnimator.markEndPos();
+            mCursorAnimator.start();
         }
         dispatchEvent(new ContentChangeEvent(this, ContentChangeEvent.ACTION_INSERT, start, end, insertedContent));
     }
@@ -3783,9 +3922,9 @@ public class CodeEditor extends View implements ContentListener, StyleReceiver, 
             mEventHandler.hideInsertHandle();
         }
         if (!mCursor.isSelected()) {
-            mCursorAnimator.markEndPosAndStart();
+            mCursorAnimator.markEndPos();
+            mCursorAnimator.start();
         }
-
         mLanguage.getAnalyzeManager().delete(start, end, deletedContent);
         onSelectionChanged(SelectionChangeEvent.CAUSE_TEXT_MODIFICATION);
         dispatchEvent(new ContentChangeEvent(this, ContentChangeEvent.ACTION_DELETE, start, end, deletedContent));
@@ -3810,11 +3949,26 @@ public class CodeEditor extends View implements ContentListener, StyleReceiver, 
     @Override
     public void onFormatSucceed(CharSequence originalText, final CharSequence newText) {
         mFormatThread = null;
-        if (originalText == mText) {
+        if (originalText == mText && newText != null) {
             post(() -> {
                 int line = mCursor.getLeftLine();
                 int column = mCursor.getLeftColumn();
                 mText.replace(0, 0, getLineCount() - 1, mText.getColumnCount(getLineCount() - 1), newText);
+                getScroller().forceFinished(true);
+                mCompletionWindow.hide();
+                setSelectionAround(line, column);
+            });
+        }
+    }
+
+    @Override
+    public void onFormatSucceed(CharSequence originalText, CharSequence replaceText, CharPosition start, CharPosition end) {
+        mFormatThread = null;
+        if (originalText == mText && replaceText != null) {
+            post(() -> {
+                int line = mCursor.getLeftLine();
+                int column = mCursor.getLeftColumn();
+                mText.replace(start.line, start.column, end.line, end.column, replaceText);
                 getScroller().forceFinished(true);
                 mCompletionWindow.hide();
                 setSelectionAround(line, column);

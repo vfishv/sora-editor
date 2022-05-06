@@ -172,7 +172,7 @@ public class DirectAccessProps implements Serializable {
      */
     @InvalidateRequired
     @FloatRange(from = 0.0f, fromInclusive = false)
-    public float indicatorWaveWidth = 2f;
+    public float indicatorWaveWidth = 0.6f;
 
     /**
      * Wave amplitude of problem indicators.
@@ -182,5 +182,24 @@ public class DirectAccessProps implements Serializable {
     @InvalidateRequired
     @FloatRange(from = 0.0f, fromInclusive = false)
     public float indicatorWaveAmplitude = 4f;
+
+    /**
+     * Compare the text to commit with composing text.
+     *
+     * See detailed issue: #155
+     */
+    public boolean trackComposingTextOnCommit = true;
+
+    /**
+     * Draw side block line when in wordwrap mode
+     */
+    @InvalidateRequired
+    public boolean drawSideBlockLine = true;
+
+    /**
+     * Cache RenderNode of long text lines
+     * This costs some memory, but improves performance.
+     */
+    public boolean cacheRenderNodeForLongLines = true;
 
 }

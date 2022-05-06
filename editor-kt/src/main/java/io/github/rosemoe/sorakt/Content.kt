@@ -1,4 +1,4 @@
-/*
+/*******************************************************************************
  *    sora-editor - the awesome code editor for Android
  *    https://github.com/Rosemoe/sora-editor
  *    Copyright (C) 2020-2022  Rosemoe
@@ -20,22 +20,21 @@
  *
  *     Please contact Rosemoe by email 2073412493@qq.com if you need
  *     additional information or have any questions
+ ******************************************************************************/
+
+package io.github.rosemoe.sorakt
+
+import io.github.rosemoe.sora.text.Content
+
+/**
+ * A delegate method.
+ * Notify the UndoManager to batch edit.
+ * @see Content.beginBatchEdit
+ * @see Content.endBatchEdit
  */
-package io.github.rosemoe.sora.widget;
-
-public interface CursorAnimator {
-
-    void markStartPos();
-    void markEndPos();
-
-    void start();
-    void cancel();
-
-    boolean isRunning();
-
-    float animatedX();
-    float animatedY();
-
-    float animatedLineHeight();
-    float animatedLineBottom();
+fun Content.batchEdit(block:(Content)->Unit):Content {
+    this.beginBatchEdit()
+    block(this)
+    this.endBatchEdit()
+    return this
 }

@@ -22,37 +22,36 @@
  *     additional information or have any questions
  ******************************************************************************/
 
-package io.github.rosemoe.sorakt
+package io.github.rosemoe.sora.app
 
-import io.github.rosemoe.sora.event.Event
-import io.github.rosemoe.sora.event.EventReceiver
-import io.github.rosemoe.sora.event.SubscriptionReceipt
+import android.graphics.Typeface
+import androidx.appcompat.app.AppCompatActivity
+import android.os.Bundle
+import io.github.rosemoe.sora.langs.java.JavaLanguage
 import io.github.rosemoe.sora.widget.CodeEditor
-import io.github.rosemoe.sora.widget.component.EditorBuiltinComponent
 
-/**
- * Subscribe event in editor
- *
- * @see CodeEditor.subscribeEvent
- */
-inline fun <reified T : Event> CodeEditor.subscribeEvent(receiver: EventReceiver<T>) : SubscriptionReceipt<T> {
-    return subscribeEvent(T::class.java, receiver)
-}
+class TestActivity : AppCompatActivity() {
+    private lateinit var editor: CodeEditor
 
-/**
- * Get builtin component so that you can enable/disable them or do some other actions.
- *
- * @see CodeEditor.getComponent
- */
-inline fun <reified T:EditorBuiltinComponent> CodeEditor.getComponent():T {
-    return getComponent(T::class.java)
-}
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        editor = CodeEditor(this)
+        setContentView(editor)
+        editor.typefaceText = Typeface.createFromAsset(assets, "Roboto-Regular.ttf")
+        editor.setEditorLanguage(JavaLanguage())
+        editor.setText("private final PopupWindow mWindow;\n" +
+                "    private final CodeEditor mEditor;\n" +
+                "    private final int mFeatures;\n" +
+                "    private final int[] mLocationBuffer = new int[2];\n" +
+                "    private final EventReceiver<ScrollEvent> mScrollListener;\n" +
+                "    private boolean mShowState;\n" +
+                "    private boolean mRegisterFlag;\n" +
+                "    private boolean mRegistered;\n" +
+                "    private int mOffsetX, mOffsetY, mX, mY, mWidth, mHeight;")
+    }
 
-/**
- * Replace the built-in component to the given one. The new component's enabled state will extend the old one.
- *
- * @see CodeEditor.replaceComponent
- */
-inline fun <reified T:EditorBuiltinComponent> CodeEditor.replaceComponent(component:T) {
-    replaceComponent(T::class.java,component)
+    override fun onDestroy() {
+        super.onDestroy()
+        editor.release()
+    }
 }

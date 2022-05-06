@@ -21,21 +21,12 @@
  *     Please contact Rosemoe by email 2073412493@qq.com if you need
  *     additional information or have any questions
  */
-package io.github.rosemoe.sora.widget;
+package io.github.rosemoe.sora.util;
 
-public interface CursorAnimator {
+public class Floats {
 
-    void markStartPos();
-    void markEndPos();
+    public static boolean withinDelta(float a, float b, float delta) {
+        return Math.abs(a - b) < Math.abs(delta);
+    }
 
-    void start();
-    void cancel();
-
-    boolean isRunning();
-
-    float animatedX();
-    float animatedY();
-
-    float animatedLineHeight();
-    float animatedLineBottom();
 }

@@ -232,8 +232,22 @@ class EditorInputConnection extends BaseInputConnection {
 
     protected void commitTextInternal(CharSequence text, boolean applyAutoIndent) {
         // NOTE: Text styles are ignored by editor
-        //Remove composing text first if there is
-        deleteComposingText();
+        // Remove composing text first if there is
+        if (mEditor.getProps().trackComposingTextOnCommit) {
+            final var composingLine = mComposingLine;
+            if (composingLine != -1) {
+                var composingText = mEditor.getText().getLine(composingLine).subSequence(mComposingStart, mComposingEnd).toString();
+                var commitText = text.toString();
+                if (commitText.startsWith(composingText) && commitText.length() > composingText.length()) {
+                    text = commitText.substring(composingText.length());
+                    mComposingLine = mComposingStart = mComposingEnd = -1;
+                } else {
+                    deleteComposingText();
+                }
+            }
+        } else if (mComposingLine != -1) {
+            deleteComposingText();
+        }
         // Replace text
         SymbolPairMatch.Replacement replacement = null;
         if (text.length() == 1 && mEditor.getProps().symbolPairAutoCompletion) {
@@ -290,6 +304,12 @@ class EditorInputConnection extends BaseInputConnection {
         }
         if (beforeLength < 0 || afterLength < 0) {
             return false;
+        }
+
+        // #170 Gboard compatible
+        if (beforeLength == 1 && afterLength == 0 && mComposingLine == -1) {
+            mEditor.deleteText();
+            return true;
         }
 
         // Start a batch edit when the operation can not be finished by one call to delete()
@@ -405,15 +425,11 @@ class EditorInputConnection extends BaseInputConnection {
             mEditor.commitText(text);
         } else {
             // Already have composing text
-            // Delete first
-            beginBatchEdit();
             if (mComposingStart != mComposingEnd) {
-                mEditor.getText().delete(mComposingLine, mComposingStart, mComposingLine, mComposingEnd);
+                mEditor.getText().replace(mComposingLine, mComposingStart, mComposingLine, mComposingEnd, text);
+                // Reset range
+                mComposingEnd = mComposingStart + text.length();
             }
-            // Reset range
-            mComposingEnd = mComposingStart + text.length();
-            mEditor.getText().insert(mComposingLine, mComposingStart, text);
-            endBatchEdit();
         }
         if (text.length() == 0) {
             finishComposingText();

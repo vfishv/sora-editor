@@ -25,6 +25,7 @@ package io.github.rosemoe.sora.app
 
 import android.app.AlertDialog
 import android.content.DialogInterface
+import android.content.Intent
 import android.graphics.Typeface
 import android.net.Uri
 import android.os.Bundle
@@ -48,9 +49,7 @@ import io.github.rosemoe.sora.text.ContentCreator
 import io.github.rosemoe.sora.textmate.core.internal.theme.reader.ThemeReader
 import io.github.rosemoe.sora.textmate.languageconfiguration.internal.supports.CharacterPair
 import io.github.rosemoe.sora.utils.CrashHandler
-import io.github.rosemoe.sora.widget.CodeEditor
-import io.github.rosemoe.sora.widget.EditorSearcher
-import io.github.rosemoe.sora.widget.SymbolInputView
+import io.github.rosemoe.sora.widget.*
 import io.github.rosemoe.sora.widget.component.Magnifier
 import io.github.rosemoe.sora.widget.schemes.*
 import io.github.rosemoe.sorakt.subscribeEvent
@@ -108,7 +107,6 @@ class MainActivity : AppCompatActivity() {
         })
         binding.editor.apply {
             typefaceText = Typeface.createFromAsset(assets, "JetBrainsMono-Regular.ttf")
-            setEditorLanguage(JavaLanguage())
             nonPrintablePaintingFlags =
                 CodeEditor.FLAG_DRAW_WHITESPACE_LEADING or CodeEditor.FLAG_DRAW_LINE_SEPARATOR or CodeEditor.FLAG_DRAW_WHITESPACE_IN_SELECTION
             // Update display dynamically
@@ -120,6 +118,28 @@ class MainActivity : AppCompatActivity() {
                 )
             }
         }
+
+        // Custom cursor animator
+        binding.editor.cursorAnimator = ScaleCursorAnimator(binding.editor)
+
+        val editor = binding.editor
+        var editorColorScheme = editor.colorScheme
+        if (editorColorScheme !is TextMateColorScheme) {
+            val iRawTheme = ThemeReader.readThemeSync(
+                "QuietLight.tmTheme",
+                assets.open("textmate/QuietLight.tmTheme")
+            )
+            editorColorScheme = TextMateColorScheme.create(iRawTheme)
+            editor.colorScheme = editorColorScheme
+        }
+        val language: Language = TextMateLanguage.create(
+            "java.tmLanguage.json",
+            assets.open("textmate/java/syntaxes/java.tmLanguage.json"),
+            InputStreamReader(assets.open("textmate/java/language-configuration.json")),
+            (editorColorScheme as TextMateColorScheme).rawTheme
+        )
+        editor.setEditorLanguage(language)
+
         openAssetsFile("sample.txt")
         updatePositionText()
         updateBtnState()
@@ -130,7 +150,9 @@ class MainActivity : AppCompatActivity() {
             try {
                 val stream = assets.open(name)
                 val text = ContentCreator.fromStream(stream)
-                runOnUiThread { binding.editor.setText(text, null) }
+                runOnUiThread {
+                    binding.editor.setText(text, null)
+                }
             } catch (e: IOException) {
                 e.printStackTrace()
             }
@@ -203,10 +225,17 @@ class MainActivity : AppCompatActivity() {
         return super.onCreateOptionsMenu(menu)
     }
 
+    override fun onDestroy() {
+        super.onDestroy()
+        binding.editor.release()
+    }
+
     override fun onOptionsItemSelected(item: MenuItem): Boolean {
         val id = item.itemId
         val editor = binding.editor
-        if (id == R.id.text_undo) {
+        if (id == R.id.open_test_activity) {
+            startActivity(Intent(this, TestActivity::class.java))
+        } else if (id == R.id.text_undo) {
             editor.undo()
         } else if (id == R.id.text_redo) {
             editor.redo()
@@ -381,7 +410,6 @@ class MainActivity : AppCompatActivity() {
                         }
                         9 -> loadTMTLauncher.launch("*/*")
                     }
-                    editor.rerunAnalysis()
                     dialog.dismiss()
                 }
                 .setNegativeButton(android.R.string.cancel, null)
