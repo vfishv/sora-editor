@@ -117,8 +117,10 @@ import io.github.rosemoe.sora.widget.layout.Layout;
 import io.github.rosemoe.sora.widget.layout.LineBreakLayout;
 import io.github.rosemoe.sora.widget.layout.WordwrapLayout;
 import io.github.rosemoe.sora.widget.schemes.EditorColorScheme;
+import io.github.rosemoe.sora.widget.style.CursorAnimator;
 import io.github.rosemoe.sora.widget.style.SelectionHandleStyle;
 import io.github.rosemoe.sora.widget.style.builtin.HandleStyleSideDrop;
+import io.github.rosemoe.sora.widget.style.builtin.MoveCursorAnimator;
 
 /**
  * CodeEditor is an editor that can highlight text regions by doing basic syntax analyzing
@@ -894,6 +896,9 @@ public class CodeEditor extends View implements ContentListener, StyleReceiver, 
         }
     }
 
+    /**
+     * Set cursor animation enabled
+     */
     public void setCursorAnimationEnabled(boolean enabled) {
         if (!enabled) {
             mCursorAnimator.cancel();
@@ -901,16 +906,27 @@ public class CodeEditor extends View implements ContentListener, StyleReceiver, 
         mCursorAnimation = enabled;
     }
 
-    public void setCursorAnimator(CursorAnimator cursorAnimator) {
+    /**
+     * @see #setCursorAnimationEnabled(boolean) 
+     */
+    public boolean isCursorAnimationEnabled() {
+        return mCursorAnimation;
+    }
+
+    /**
+     * Set cursor animation
+     * @see CursorAnimator
+     * @see #getCursorAnimator() 
+     */
+    public void setCursorAnimator(@NonNull CursorAnimator cursorAnimator) {
         mCursorAnimator = cursorAnimator;
     }
 
+    /**
+     * @see #setCursorAnimator(CursorAnimator) 
+     */
     public CursorAnimator getCursorAnimator() {
         return mCursorAnimator;
-    }
-
-    public boolean isCursorAnimationEnabled() {
-        return mCursorAnimation;
     }
 
     /**
@@ -1145,12 +1161,8 @@ public class CodeEditor extends View implements ContentListener, StyleReceiver, 
         return mHardwareAccAllowed;
     }
 
-    /*private char[] bidiBuffer;
-    private byte[] bidiLevels;*/
-
     /**
      * As the name is, we find where leading spaces end and trailing spaces start
-     * Before calling this, the line should be prepared
      *
      * @param line The line to search
      */
@@ -1453,10 +1465,12 @@ public class CodeEditor extends View implements ContentListener, StyleReceiver, 
      *
      * @param line Line going to draw or measure
      */
+    @UnsupportedUserUsage
     protected void prepareLine(int line) {
         mBuffer = mText.getLine(line);
     }
 
+    @UnsupportedUserUsage
     ContentLine getLineBuffer() {
         return mBuffer;
     }
@@ -3921,7 +3935,7 @@ public class CodeEditor extends View implements ContentListener, StyleReceiver, 
             ensureSelectionVisible();
             mEventHandler.hideInsertHandle();
         }
-        if (!mCursor.isSelected()) {
+        if (!mCursor.isSelected() && !mWait) {
             mCursorAnimator.markEndPos();
             mCursorAnimator.start();
         }
