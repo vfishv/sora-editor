@@ -1,7 +1,7 @@
 /*
  *    sora-editor - the awesome code editor for Android
  *    https://github.com/Rosemoe/sora-editor
- *    Copyright (C) 2020-2022  Rosemoe
+ *    Copyright (C) 2020-2023  Rosemoe
  *
  *     This library is free software; you can redistribute it and/or
  *     modify it under the terms of the GNU Lesser General Public
@@ -23,7 +23,7 @@
  */
 package io.github.rosemoe.sora.langs.java;
 
-import android.util.SparseArray;
+import android.os.Bundle;
 
 import androidx.annotation.NonNull;
 
@@ -31,11 +31,13 @@ import java.util.List;
 import java.util.Stack;
 
 import io.github.rosemoe.sora.lang.analysis.AsyncIncrementalAnalyzeManager;
+import io.github.rosemoe.sora.lang.brackets.SimpleBracketsCollector;
 import io.github.rosemoe.sora.lang.completion.IdentifierAutoComplete;
 import io.github.rosemoe.sora.lang.styling.CodeBlock;
 import io.github.rosemoe.sora.lang.styling.Span;
 import io.github.rosemoe.sora.lang.styling.TextStyle;
 import io.github.rosemoe.sora.text.Content;
+import io.github.rosemoe.sora.text.ContentReference;
 import io.github.rosemoe.sora.util.ArrayList;
 import io.github.rosemoe.sora.util.IntPair;
 import io.github.rosemoe.sora.widget.schemes.EditorColorScheme;
@@ -46,7 +48,7 @@ public class JavaIncrementalAnalyzeManager extends AsyncIncrementalAnalyzeManage
     private final static int STATE_INCOMPLETE_COMMENT = 1;
 
     private final ThreadLocal<JavaTextTokenizer> tokenizerProvider = new ThreadLocal<>();
-    protected IdentifierAutoComplete.Identifiers identifiers;
+    protected IdentifierAutoComplete.SyncIdentifiers identifiers = new IdentifierAutoComplete.SyncIdentifiers();
 
     private synchronized JavaTextTokenizer obtainTokenizer() {
         var res = tokenizerProvider.get();
@@ -63,8 +65,8 @@ public class JavaIncrementalAnalyzeManager extends AsyncIncrementalAnalyzeManage
         var blocks = new ArrayList<CodeBlock>();
         var maxSwitch = 0;
         var currSwitch = 0;
-        var identifiers = new IdentifierAutoComplete.Identifiers();
-        identifiers.begin();
+        var brackets = new SimpleBracketsCollector();
+        var bracketsStack = new Stack<Long>();
         for (int i = 0; i < text.getLineCount() && delegate.isNotCancelled(); i++) {
             var state = getState(i);
             boolean checkForIdentifiers = state.state.state == STATE_NORMAL || (state.state.state == STATE_INCOMPLETE_COMMENT && state.tokens.size() > 1);
@@ -96,19 +98,54 @@ public class JavaIncrementalAnalyzeManager extends AsyncIncrementalAnalyzeManage
                                 blocks.add(block);
                             }
                         }
-                    } else if (token == ORDINAL_IDT) {
-                        var offset = IntPair.getSecond(tokenRecord);
-                        var end = i1 + 1 < state.tokens.size() ? IntPair.getSecond(state.tokens.get(i1 + 1)) : text.getColumnCount(i);
-                        identifiers.addIdentifier(new String(text.getLine(i).getRawData(), offset, end - offset));
+                    }
+                    var type = getType(token);
+                    if (type > 0) {
+                        if (isStart(token)) {
+                            bracketsStack.push(IntPair.pack(type, text.getCharIndex(i, IntPair.getSecond(tokenRecord))));
+                        } else {
+                            if (!bracketsStack.isEmpty()) {
+                                var record = bracketsStack.pop();
+                                var typeRecord = IntPair.getFirst(record);
+                                if (typeRecord == type) {
+                                    brackets.add(IntPair.getSecond(record), text.getCharIndex(i, IntPair.getSecond(tokenRecord)));
+                                } else if (type == 3) {
+                                    // Bad syntax, try to find type 3
+                                    while (!bracketsStack.isEmpty()) {
+                                        record = bracketsStack.pop();
+                                        if (IntPair.getFirst(record) == 3) {
+                                            brackets.add(IntPair.getSecond(record), text.getCharIndex(i, IntPair.getSecond(tokenRecord)));
+                                            break;
+                                        }
+                                    }
+                                }
+                            }
+                        }
                     }
                 }
             }
         }
-        identifiers.finish();
         if (delegate.isNotCancelled()) {
-            this.identifiers = identifiers;
+            withReceiver(r -> r.updateBracketProvider(this, brackets));
         }
         return blocks;
+    }
+
+    private static int getType(int token) {
+        if (token == Tokens.LBRACE.ordinal() || token == Tokens.RBRACE.ordinal()) {
+            return 3;
+        }
+        if (token == Tokens.LBRACK.ordinal() || token == Tokens.RBRACK.ordinal()) {
+            return 2;
+        }
+        if (token == Tokens.LPAREN.ordinal() || token == Tokens.RPAREN.ordinal()) {
+            return 1;
+        }
+        return 0;
+    }
+
+    private static boolean isStart(int token) {
+        return token == Tokens.LBRACE.ordinal() || token == Tokens.LBRACK.ordinal() || token == Tokens.LPAREN.ordinal();
     }
 
     @Override
@@ -123,7 +160,31 @@ public class JavaIncrementalAnalyzeManager extends AsyncIncrementalAnalyzeManage
     }
 
     @Override
-    public LineTokenizeResult<State, Long> tokenizeLine(CharSequence line, State state) {
+    public void onAddState(State state) {
+        if (state.identifiers != null) {
+            for (String identifier : state.identifiers) {
+                identifiers.identifierIncrease(identifier);
+            }
+        }
+    }
+
+    @Override
+    public void onAbandonState(State state) {
+        if (state.identifiers != null) {
+            for (String identifier : state.identifiers) {
+                identifiers.identifierDecrease(identifier);
+            }
+        }
+    }
+
+    @Override
+    public void reset(@NonNull ContentReference content, @NonNull Bundle extraArguments) {
+        super.reset(content, extraArguments);
+        identifiers.clear();
+    }
+
+    @Override
+    public LineTokenizeResult<State, Long> tokenizeLine(CharSequence line, State state, int lineIndex) {
         var tokens = new ArrayList<Long>();
         int newState = 0;
         var stateObj = new State();
@@ -174,6 +235,9 @@ public class JavaIncrementalAnalyzeManager extends AsyncIncrementalAnalyzeManage
             tokens.add(token(token, tokenizer.offset));
             if (token == Tokens.LBRACE || token == Tokens.RBRACE) {
                 st.hasBraces = true;
+            }
+            if (token == Tokens.IDENTIFIER) {
+                st.addIdentifier(tokenizer.getTokenText());
             }
             if (token == Tokens.LONG_COMMENT_INCOMPLETE) {
                 state = STATE_INCOMPLETE_COMMENT;
@@ -274,7 +338,7 @@ public class JavaIncrementalAnalyzeManager extends AsyncIncrementalAnalyzeManage
                 case LINE_COMMENT:
                 case LONG_COMMENT_COMPLETE:
                 case LONG_COMMENT_INCOMPLETE:
-                    spans.add(Span.obtain(offset, TextStyle.makeStyle(EditorColorScheme.COMMENT, true)));
+                    spans.add(Span.obtain(offset, TextStyle.makeStyle(EditorColorScheme.COMMENT, 0, false, true, false, true)));
                     break;
                 case IDENTIFIER: {
                     int type = EditorColorScheme.IDENTIFIER_NAME;
@@ -348,7 +412,6 @@ public class JavaIncrementalAnalyzeManager extends AsyncIncrementalAnalyzeManage
 
     private static final int ORDINAL_LBRACE = Tokens.LBRACE.ordinal();
     private static final int ORDINAL_RBRACE = Tokens.RBRACE.ordinal();
-    private static final int ORDINAL_IDT = Tokens.IDENTIFIER.ordinal();
     private static Tokens[] mapping;
 
 }

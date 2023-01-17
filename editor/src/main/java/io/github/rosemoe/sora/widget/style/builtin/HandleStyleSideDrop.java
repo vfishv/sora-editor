@@ -1,7 +1,7 @@
 /*
  *    sora-editor - the awesome code editor for Android
  *    https://github.com/Rosemoe/sora-editor
- *    Copyright (C) 2020-2022  Rosemoe
+ *    Copyright (C) 2020-2023  Rosemoe
  *
  *     This library is free software; you can redistribute it and/or
  *     modify it under the terms of the GNU Lesser General Public
@@ -31,7 +31,7 @@ import android.util.TypedValue;
 import androidx.annotation.NonNull;
 
 public class HandleStyleSideDrop extends HandleStyleDrop {
-    
+
     private final int size;
     private final Paint paint;
 
@@ -41,7 +41,7 @@ public class HandleStyleSideDrop extends HandleStyleDrop {
         paint = new Paint();
         paint.setAntiAlias(true);
     }
-    
+
     @Override
     public void draw(@NonNull Canvas canvas, int handleType, float x, float y, int rowHeight, int color, @NonNull HandleDescriptor descriptor) {
         float radius = size / 2f;

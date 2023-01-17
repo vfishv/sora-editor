@@ -1,7 +1,7 @@
 /*
  *    sora-editor - the awesome code editor for Android
  *    https://github.com/Rosemoe/sora-editor
- *    Copyright (C) 2020-2022  Rosemoe
+ *    Copyright (C) 2020-2023  Rosemoe
  *
  *     This library is free software; you can redistribute it and/or
  *     modify it under the terms of the GNU Lesser General Public
@@ -24,43 +24,52 @@
 package io.github.rosemoe.sora.text;
 
 import android.text.GetChars;
-import android.text.TextUtils;
 
 import androidx.annotation.NonNull;
+import androidx.annotation.Nullable;
 
 import io.github.rosemoe.sora.annotations.UnsupportedUserUsage;
+import io.github.rosemoe.sora.text.bidi.BidiRequirementChecker;
+import io.github.rosemoe.sora.text.bidi.TextBidi;
 
-public class ContentLine implements CharSequence, GetChars {
+public class ContentLine implements CharSequence, GetChars, BidiRequirementChecker {
 
     @UnsupportedUserUsage
     public char[] value;
-
-    private int length;
-
-    /**
-     * Id in BinaryHeap
-     */
-    private int id;
-
-    /**
-     * Measured width of line
-     */
-    private int width;
-
     /**
      * Width of each character inside
      */
     @UnsupportedUserUsage
     public float[] widthCache;
+    @UnsupportedUserUsage
     public long timestamp;
+    @UnsupportedUserUsage
+    public int styleHash;
+    private int length;
+
+    private int rtlAffectingCount;
+    private LineSeparator lineSeparator;
 
     public ContentLine() {
         this(true);
     }
 
-    public ContentLine(CharSequence text) {
+    public ContentLine(@Nullable CharSequence text) {
         this(true);
         insert(0, text);
+    }
+
+    public ContentLine(@NonNull ContentLine src) {
+        this(src.length + 16);
+        length = src.length;
+        rtlAffectingCount = src.rtlAffectingCount;
+        lineSeparator = src.lineSeparator;
+        System.arraycopy(src.value, 0, value, 0, length);
+    }
+
+    public ContentLine(int size) {
+        length = 0;
+        value = new char[size];
     }
 
     private ContentLine(boolean initialize) {
@@ -68,70 +77,6 @@ public class ContentLine implements CharSequence, GetChars {
             length = 0;
             value = new char[32];
         }
-        id = -1;
-        width = 0;
-    }
-
-    static int lastIndexOf(char[] source, int sourceCount,
-                           char[] target, int targetCount,
-                           int fromIndex) {
-        /*
-         * Check arguments; return immediately where possible. For
-         * consistency, don't check for null str.
-         */
-        int rightIndex = sourceCount - targetCount;
-        if (fromIndex < 0) {
-            return -1;
-        }
-        if (fromIndex > rightIndex) {
-            fromIndex = rightIndex;
-        }
-        /* Empty string always matches. */
-        if (targetCount == 0) {
-            return fromIndex;
-        }
-
-        int strLastIndex = targetCount - 1;
-        char strLastChar = target[strLastIndex];
-        int min = targetCount - 1;
-        int i = min + fromIndex;
-
-        startSearchForLastChar:
-        while (true) {
-            while (i >= min && source[i] != strLastChar) {
-                i--;
-            }
-            if (i < min) {
-                return -1;
-            }
-            int j = i - 1;
-            int start = j - (targetCount - 1);
-            int k = strLastIndex - 1;
-
-            while (j > start) {
-                if (source[j--] != target[k--]) {
-                    i--;
-                    continue startSearchForLastChar;
-                }
-            }
-            return start + 1;
-        }
-    }
-
-    public int getId() {
-        return id;
-    }
-
-    public void setId(int id) {
-        this.id = id;
-    }
-
-    public int getWidth() {
-        return width;
-    }
-
-    public void setWidth(int width) {
-        this.width = width;
     }
 
     private void checkIndex(int index) {
@@ -170,11 +115,10 @@ public class ContentLine implements CharSequence, GetChars {
      * @return a reference to this object.
      * @throws IndexOutOfBoundsException if the offset is invalid.
      */
-    public ContentLine insert(int dstOffset, CharSequence s) {
+    @NonNull
+    public ContentLine insert(int dstOffset, @Nullable CharSequence s) {
         if (s == null)
             s = "null";
-        if (s instanceof String)
-            return this.insert(dstOffset, (String) s);
         return this.insert(dstOffset, s, 0, s.length());
     }
 
@@ -222,7 +166,8 @@ public class ContentLine implements CharSequence, GetChars {
      *                                   {@code start} is greater than {@code end} or
      *                                   {@code end} is greater than {@code s.length()}
      */
-    public ContentLine insert(int dstOffset, CharSequence s,
+    @NonNull
+    public ContentLine insert(int dstOffset, @Nullable CharSequence s,
                               int start, int end) {
         if (s == null)
             s = "null";
@@ -236,9 +181,28 @@ public class ContentLine implements CharSequence, GetChars {
         ensureCapacity(length + len);
         System.arraycopy(value, dstOffset, value, dstOffset + len,
                 length - dstOffset);
-        for (int i = start; i < end; i++)
-            value[dstOffset++] = s.charAt(i);
+        for (int i = start; i < end; i++) {
+            var ch = s.charAt(i);
+            value[dstOffset++] = ch;
+            if (TextBidi.couldAffectRtl(ch)) {
+                rtlAffectingCount++;
+            }
+        }
         length += len;
+        return this;
+    }
+
+    @NonNull
+    public ContentLine insert(int offset, char c) {
+        ensureCapacity(length + 1);
+        if (offset < length) {
+            System.arraycopy(value, offset, value, offset + 1, length - offset);
+        }
+        if (TextBidi.couldAffectRtl(c)) {
+            rtlAffectingCount++;
+        }
+        value[offset] = c;
+        length += 1;
         return this;
     }
 
@@ -256,6 +220,7 @@ public class ContentLine implements CharSequence, GetChars {
      *                                         is negative, greater than {@code length()}, or
      *                                         greater than {@code end}.
      */
+    @NonNull
     public ContentLine delete(int start, int end) {
         if (start < 0)
             throw new StringIndexOutOfBoundsException(start);
@@ -265,48 +230,24 @@ public class ContentLine implements CharSequence, GetChars {
             throw new StringIndexOutOfBoundsException();
         int len = end - start;
         if (len > 0) {
+            for (int i = start; i < end; i++) {
+                if (TextBidi.couldAffectRtl(value[i])) {
+                    rtlAffectingCount--;
+                }
+            }
             System.arraycopy(value, start + len, value, start, length - end);
             length -= len;
         }
         return this;
     }
 
-    public ContentLine insert(int offset, char c) {
-        ensureCapacity(length + 1);
-        if (offset < length) {
-            System.arraycopy(value, offset, value, offset + 1, length - offset);
-        }
-        value[offset] = c;
-        length += 1;
-        return this;
+    public boolean mayNeedBidi() {
+        return rtlAffectingCount > 0;
     }
 
-    public ContentLine append(CharSequence s, int start, int end) {
-        if (s == null)
-            s = "null";
-        if ((start < 0) || (start > end) || (end > s.length()))
-            throw new IndexOutOfBoundsException(
-                    "start " + start + ", end " + end + ", s.length() "
-                            + s.length());
-        int len = end - start;
-        ensureCapacity(length + len);
-        for (int i = start, j = length; i < end; i++, j++)
-            value[j] = s.charAt(i);
-        length += len;
-        return this;
-    }
-
+    @NonNull
     public ContentLine append(CharSequence text) {
         return this.insert(length, text);
-    }
-
-    public int indexOf(CharSequence text, int index) {
-        return TextUtils.indexOf(this, text, index);
-    }
-
-    public int lastIndexOf(String str, int fromIndex) {
-        return lastIndexOf(value, length,
-                str.toCharArray(), str.length(), fromIndex);
     }
 
     @Override
@@ -314,9 +255,18 @@ public class ContentLine implements CharSequence, GetChars {
         return length;
     }
 
+    /**
+     * {@inheritDoc}
+     * <strong>Index is unchecked for performance</strong>
+     */
     @Override
+    @UnsupportedUserUsage
     public char charAt(int index) {
-        checkIndex(index);
+        // checkIndex(index);
+        if (index >= length) {
+            var separator = getLineSeparator();
+            return separator.getLength() > 0 ? getLineSeparator().getContent().charAt(index - length) : '\n';
+        }
         return value[index];
     }
 
@@ -330,9 +280,18 @@ public class ContentLine implements CharSequence, GetChars {
         }
         char[] newValue = new char[end - start + 16];
         System.arraycopy(value, start, newValue, 0, end - start);
-        ContentLine res = new ContentLine(false);
+        var res = new ContentLine(false);
         res.value = newValue;
         res.length = end - start;
+
+        // Compute new value when required
+        if (rtlAffectingCount > 0) {
+            for (int i = 0; i < res.length; i++) {
+                if (TextBidi.couldAffectRtl(newValue[i])) {
+                    res.rtlAffectingCount++;
+                }
+            }
+        }
         return res;
     }
 
@@ -349,11 +308,21 @@ public class ContentLine implements CharSequence, GetChars {
         return new String(value, 0, length);
     }
 
+    @NonNull
+    public String toStringWithNewline() {
+        if (value.length == length) {
+            ensureCapacity(length + 1);
+        }
+        value[length] = '\n';
+        return new String(value, 0, length + 1);
+    }
+
+    @NonNull
     public char[] getRawData() {
         return value;
     }
 
-    public void getChars(int srcBegin, int srcEnd, char[] dst, int dstBegin) {
+    public void getChars(int srcBegin, int srcEnd, @NonNull char[] dst, int dstBegin) {
         if (srcBegin < 0)
             throw new StringIndexOutOfBoundsException(srcBegin);
         if ((srcEnd < 0) || (srcEnd > length))
@@ -363,4 +332,15 @@ public class ContentLine implements CharSequence, GetChars {
         System.arraycopy(value, srcBegin, dst, dstBegin, srcEnd - srcBegin);
     }
 
+    public void setLineSeparator(@Nullable LineSeparator separator) {
+        this.lineSeparator = separator;
+    }
+
+    @NonNull
+    public LineSeparator getLineSeparator() {
+        if (lineSeparator == null) {
+            return LineSeparator.NONE;
+        }
+        return lineSeparator;
+    }
 }

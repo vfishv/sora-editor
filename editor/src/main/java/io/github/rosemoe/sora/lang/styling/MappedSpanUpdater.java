@@ -1,7 +1,7 @@
 /*
  *    sora-editor - the awesome code editor for Android
  *    https://github.com/Rosemoe/sora-editor
- *    Copyright (C) 2020-2022  Rosemoe
+ *    Copyright (C) 2020-2023  Rosemoe
  *
  *     This library is free software; you can redistribute it and/or
  *     modify it under the terms of the GNU Lesser General Public
@@ -31,7 +31,7 @@ import io.github.rosemoe.sora.widget.schemes.EditorColorScheme;
 /**
  * Update spans on text change event
  *
- * @author Rose
+ * @author Rosemoe
  */
 public class MappedSpanUpdater {
 
@@ -162,7 +162,7 @@ public class MappedSpanUpdater {
         // Add original spans to new line
         List<Span> endLineSpans = map.get(endLine);
         int idx = extendedSpanIndex;
-        while (idx  < startLineSpans.size()) {
+        while (idx < startLineSpans.size()) {
             Span span = startLineSpans.get(idx++);
             endLineSpans.add(span.copy().setColumn(Math.max(0, span.column - startColumn + endColumn)));
         }

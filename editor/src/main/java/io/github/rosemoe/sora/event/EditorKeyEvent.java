@@ -1,7 +1,7 @@
 /*
  *    sora-editor - the awesome code editor for Android
  *    https://github.com/Rosemoe/sora-editor
- *    Copyright (C) 2020-2022  Rosemoe
+ *    Copyright (C) 2020-2023  Rosemoe
  *
  *     This library is free software; you can redistribute it and/or
  *     modify it under the terms of the GNU Lesser General Public
@@ -25,27 +25,41 @@ package io.github.rosemoe.sora.event;
 
 import android.view.KeyEvent;
 
+import androidx.annotation.NonNull;
+
+import io.github.rosemoe.sora.text.method.KeyMetaStates;
 import io.github.rosemoe.sora.widget.CodeEditor;
 
 /**
  * Receives key related events in editor.
  * <p>
  * You may set a boolean for editor to return to the Android KeyEvent framework.
+ *
+ * @author Rosemoe
  * @see ResultedEvent#setResult(Object)
  * <p>
  * This class mirrors methods of {@link KeyEvent}, but some methods are changed:
  * @see #isAltPressed()
  * @see #isShiftPressed()
- *
- * @author Rosemoe
  */
 public class EditorKeyEvent extends ResultedEvent<Boolean> {
 
     private final KeyEvent src;
+    private final Type type;
+    private final boolean shiftPressed;
+    private final boolean altPressed;
 
-    public EditorKeyEvent(CodeEditor editor, KeyEvent src) {
+    public EditorKeyEvent(@NonNull CodeEditor editor, @NonNull KeyEvent src, @NonNull Type type) {
         super(editor);
         this.src = src;
+        this.type = type;
+        shiftPressed = getEditor().getKeyMetaStates().isShiftPressed();
+        altPressed = getEditor().getKeyMetaStates().isAltPressed();
+    }
+
+    @Override
+    public boolean canIntercept() {
+        return true;
     }
 
     public int getAction() {
@@ -72,23 +86,33 @@ public class EditorKeyEvent extends ResultedEvent<Boolean> {
         return src.getDownTime();
     }
 
+    /**
+     * Get the key event type.
+     *
+     * @return The key event type.
+     */
+    @NonNull
+    public Type getEventType() {
+        return this.type;
+    }
+
     @Override
     public long getEventTime() {
         return src.getEventTime();
     }
 
     /**
-     * editor change: track shift/alt by {@link io.github.rosemoe.sora.widget.KeyMetaStates}
+     * editor change: track shift/alt by {@link KeyMetaStates}
      */
     public boolean isShiftPressed() {
-        return getEditor().getKeyMetaStates().isShiftPressed();
+        return shiftPressed;
     }
 
     /**
-     * editor change: track shift/alt by {@link io.github.rosemoe.sora.widget.KeyMetaStates}
+     * editor change: track shift/alt by {@link KeyMetaStates}
      */
     public boolean isAltPressed() {
-        return getEditor().getKeyMetaStates().isAltPressed();
+        return altPressed;
     }
 
     public boolean isCtrlPressed() {
@@ -102,5 +126,26 @@ public class EditorKeyEvent extends ResultedEvent<Boolean> {
         } else {
             return userResult || editorResult;
         }
+    }
+
+    /**
+     * The type of {@link EditorKeyEvent}.
+     */
+    public enum Type {
+
+        /**
+         * Used for {@link CodeEditor#onKeyUp(int, KeyEvent)}.
+         */
+        UP,
+
+        /**
+         * Used for {@link CodeEditor#onKeyDown(int, KeyEvent)}.
+         */
+        DOWN,
+
+        /**
+         * Used for {@link CodeEditor#onKeyMultiple(int, int, KeyEvent)}.
+         */
+        MULTIPLE
     }
 }

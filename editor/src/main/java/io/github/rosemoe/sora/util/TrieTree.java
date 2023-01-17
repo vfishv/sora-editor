@@ -1,7 +1,7 @@
 /*
  *    sora-editor - the awesome code editor for Android
  *    https://github.com/Rosemoe/sora-editor
- *    Copyright (C) 2020-2022  Rosemoe
+ *    Copyright (C) 2020-2023  Rosemoe
  *
  *     This library is free software; you can redistribute it and/or
  *     modify it under the terms of the GNU Lesser General Public
@@ -99,11 +99,9 @@ public class TrieTree<T> {
      */
     public static class HashCharMap<V> {
 
-        private final LinkedPair<V>[] columns;
-
-        private final LinkedPair<V>[] ends;
-
         private final static int CAPACITY = 64;
+        private final LinkedPair<V>[] columns;
+        private final LinkedPair<V>[] ends;
 
         @SuppressWarnings("unchecked")
         public HashCharMap() {

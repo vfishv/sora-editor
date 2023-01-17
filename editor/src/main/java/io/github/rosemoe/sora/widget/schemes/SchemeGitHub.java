@@ -1,7 +1,7 @@
 /*
  *    sora-editor - the awesome code editor for Android
  *    https://github.com/Rosemoe/sora-editor
- *    Copyright (C) 2020-2022  Rosemoe
+ *    Copyright (C) 2020-2023  Rosemoe
  *
  *     This library is free software; you can redistribute it and/or
  *     modify it under the terms of the GNU Lesser General Public
@@ -45,6 +45,7 @@ public class SchemeGitHub extends EditorColorScheme {
         setColor(TEXT_NORMAL, 0xff24292e);
         setColor(LINE_NUMBER_BACKGROUND, 0xffffffff);
         setColor(LINE_NUMBER, 0xffbec0c1);
+        setColor(LINE_NUMBER_CURRENT, 0xffbec0c1);
         setColor(SELECTION_INSERT, 0xffc7edcc);
         setColor(SELECTION_HANDLE, 0xffc7edcc);
     }

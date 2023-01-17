@@ -1,7 +1,7 @@
 /*
  *    sora-editor - the awesome code editor for Android
  *    https://github.com/Rosemoe/sora-editor
- *    Copyright (C) 2020-2022  Rosemoe
+ *    Copyright (C) 2020-2023  Rosemoe
  *
  *     This library is free software; you can redistribute it and/or
  *     modify it under the terms of the GNU Lesser General Public
@@ -30,6 +30,19 @@ import android.util.AttributeSet;
 import android.widget.Button;
 import android.widget.LinearLayout;
 
+import androidx.annotation.NonNull;
+
+import io.github.rosemoe.sora.R;
+
+/**
+ * A simple symbol input view implementation for editor.
+ *
+ * <p>
+ * First, add your symbols by {@link #addSymbols(String[], String[])}.
+ * Then, bind a certain editor by {@link #bindEditor(CodeEditor)} so that it works
+ *
+ * @author Rosemoe
+ */
 public class SymbolInputView extends LinearLayout {
 
     private int textColor;
@@ -56,9 +69,9 @@ public class SymbolInputView extends LinearLayout {
     }
 
     private void init() {
-        setBackgroundColor(Color.WHITE);
+        setBackgroundColor(getContext().getResources().getColor(R.color.defaultSymbolInputBackgroundColor));
         setOrientation(HORIZONTAL);
-        textColor = Color.BLACK;
+        setTextColor(getContext().getResources().getColor(R.color.defaultSymbolInputTextColor));
     }
 
     /**
@@ -66,6 +79,13 @@ public class SymbolInputView extends LinearLayout {
      */
     public void bindEditor(CodeEditor editor) {
         this.editor = editor;
+    }
+
+    /**
+     * @see #setTextColor(int)
+     */
+    public int getTextColor() {
+        return textColor;
     }
 
     /**
@@ -91,20 +111,37 @@ public class SymbolInputView extends LinearLayout {
      * @param display    The texts displayed in button
      * @param insertText The actual text to be inserted to editor when the button is clicked
      */
-    public void addSymbols(String[] display, final String[] insertText) {
+    public void addSymbols(@NonNull String[] display, @NonNull final String[] insertText) {
         int count = Math.max(display.length, insertText.length);
         for (int i = 0; i < count; i++) {
-            Button btn = new Button(getContext(), null, android.R.attr.buttonStyleSmall);
+            var btn = new Button(getContext(), null, android.R.attr.buttonStyleSmall);
             btn.setText(display[i]);
-            btn.setBackground(new ColorDrawable(0));
+            btn.setBackground(new ColorDrawable(Color.TRANSPARENT));
             btn.setTextColor(textColor);
-            addView(btn, new LayoutParams(-2, -1));
+            addView(btn, new LayoutParams(LayoutParams.WRAP_CONTENT, LayoutParams.MATCH_PARENT));
             int finalI = i;
             btn.setOnClickListener((view) -> {
-                if (editor != null)
-                    editor.insertText(insertText[finalI], 1);
+                if (editor != null && editor.isEditable()) {
+                    if ("\t".equals(insertText[finalI]) && editor.getSnippetController().isInSnippet()) {
+                        editor.getSnippetController().shiftToNextTabStop();
+                    } else {
+                        editor.insertText(insertText[finalI], 1);
+                    }
+                }
             });
         }
+    }
+
+    public void forEachButton(@NonNull ButtonConsumer consumer) {
+        for (int i = 0; i < getChildCount(); i++) {
+            consumer.accept((Button) getChildAt(i));
+        }
+    }
+
+    public interface ButtonConsumer {
+
+        void accept(@NonNull Button btn);
+
     }
 
 }

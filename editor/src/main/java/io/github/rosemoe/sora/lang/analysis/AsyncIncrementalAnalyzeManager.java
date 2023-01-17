@@ -1,7 +1,7 @@
 /*
  *    sora-editor - the awesome code editor for Android
  *    https://github.com/Rosemoe/sora-editor
- *    Copyright (C) 2020-2022  Rosemoe
+ *    Copyright (C) 2020-2023  Rosemoe
  *
  *     This library is free software; you can redistribute it and/or
  *     modify it under the terms of the GNU Lesser General Public
@@ -24,16 +24,17 @@
 package io.github.rosemoe.sora.lang.analysis;
 
 import android.os.Bundle;
-import android.os.Handler;
-import android.os.Looper;
 import android.os.Message;
 import android.util.Log;
 
 import androidx.annotation.NonNull;
+import androidx.annotation.Nullable;
 
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+import java.util.concurrent.BlockingQueue;
+import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
@@ -50,16 +51,38 @@ import io.github.rosemoe.sora.widget.schemes.EditorColorScheme;
 
 public abstract class AsyncIncrementalAnalyzeManager<S, T> implements IncrementalAnalyzeManager<S, T> {
 
+    private final static int MSG_BASE = 11451400;
+    private final static int MSG_INIT = MSG_BASE + 1;
+    private final static int MSG_MOD = MSG_BASE + 2;
+    private static int sThreadId = 0;
     private StyleReceiver receiver;
     private ContentReference ref;
     private Bundle extraArguments;
     private LooperThread thread;
     private volatile long runCount;
-    private static int sThreadId = 0;
-    private final static int MSG_BASE = 11451400;
-    private final static int MSG_INIT = MSG_BASE + 1;
-    private final static int MSG_MOD = MSG_BASE + 2;
-    private final static int MSG_EXIT = MSG_BASE + 3;
+
+    private synchronized static int nextThreadId() {
+        sThreadId++;
+        return sThreadId;
+    }
+
+    /**
+     * Get receiver
+     */
+    @Nullable
+    protected StyleReceiver getReceiver() {
+        return receiver;
+    }
+
+    /**
+     * Run the given code block only when the receiver is currently non-null
+     */
+    protected void withReceiver(@NonNull ReceiverConsumer consumer) {
+        var r = getReceiver();
+        if (r != null) {
+            consumer.accept(r);
+        }
+    }
 
     @Override
     public void setReceiver(StyleReceiver receiver) {
@@ -74,70 +97,72 @@ public abstract class AsyncIncrementalAnalyzeManager<S, T> implements Incrementa
     }
 
     @Override
-    public void insert(CharPosition start, CharPosition end, CharSequence insertedText) {
+    public void insert(@NonNull CharPosition start, @NonNull CharPosition end, @NonNull CharSequence insertedText) {
         if (thread != null) {
             increaseRunCount();
-            thread.handler.sendMessage(thread.handler.obtainMessage(MSG_MOD, new TextModification(IntPair.pack(start.line, start.column), IntPair.pack(end.line, end.column), insertedText)));
-            sendUpdate(thread.styles);
+            thread.offerMessage(MSG_MOD, new TextModification(IntPair.pack(start.line, start.column), IntPair.pack(end.line, end.column), insertedText));
         }
     }
 
     @Override
-    public void delete(CharPosition start, CharPosition end, CharSequence deletedText) {
+    public void delete(@NonNull CharPosition start, @NonNull CharPosition end, @NonNull CharSequence deletedText) {
         if (thread != null) {
             increaseRunCount();
-            thread.handler.sendMessage(thread.handler.obtainMessage(MSG_MOD, new TextModification(IntPair.pack(start.line, start.column), IntPair.pack(end.line, end.column), null)));
-            sendUpdate(thread.styles);
+            thread.offerMessage(MSG_MOD, new TextModification(IntPair.pack(start.line, start.column), IntPair.pack(end.line, end.column), null));
         }
     }
 
     @Override
     public void rerun() {
         if (thread != null) {
-            thread.callback = () -> { throw new CancelledException(); };
             if (thread.isAlive()) {
-                final var handler = thread.handler;
-                if (handler != null) {
-                    handler.sendMessage(Message.obtain(thread.handler, MSG_EXIT));
-                }
+                thread.interrupt();
                 thread.abort = true;
             }
         }
         final var text = ref.getReference().copyText(false);
         text.setUndoEnabled(false);
-        thread = new LooperThread(() -> thread.handler.sendMessage(thread.handler.obtainMessage(MSG_INIT, text)));
+        thread = new LooperThread();
         thread.setName("AsyncAnalyzer-" + nextThreadId());
+        thread.offerMessage(MSG_INIT, text);
         increaseRunCount();
+        sendNewStyles(null);
         thread.start();
-        sendUpdate(null);
     }
 
     @Override
     public LineTokenizeResult<S, T> getState(int line) {
         final var thread = this.thread;
         if (thread == Thread.currentThread()) {
-            return thread.states.get(line);
+            if (line >= 0 && line < thread.states.size()) {
+                return thread.states.get(line);
+            }
+            return null;
         }
         throw new SecurityException("Can not get state from non-analytical or abandoned thread");
     }
 
-    private synchronized void increaseRunCount() {
-        runCount ++;
+    @Override
+    public void onAbandonState(S state) {
+
     }
 
-    private synchronized static int nextThreadId() {
-        sThreadId++;
-        return sThreadId;
+    @Override
+    public void onAddState(S state) {
+
+    }
+
+    private synchronized void increaseRunCount() {
+        runCount++;
     }
 
     @Override
     public void destroy() {
         if (thread != null) {
-            thread.callback = () -> { throw new CancelledException(); };
             if (thread.isAlive()) {
-                thread.handler.sendMessage(Message.obtain(thread.handler, MSG_EXIT));
-                thread.abort = true;
+                thread.interrupt();
             }
+            thread.abort = true;
         }
         receiver = null;
         ref = null;
@@ -145,15 +170,23 @@ public abstract class AsyncIncrementalAnalyzeManager<S, T> implements Incrementa
         thread = null;
     }
 
-    private void sendUpdate(Styles styles) {
+    private void sendNewStyles(Styles styles) {
         final var r = receiver;
         if (r != null) {
             r.setStyles(this, styles);
         }
     }
 
+    private void sendUpdate(Styles styles, int startLine, int endLine) {
+        final var r = receiver;
+        if (r != null) {
+            r.updateStyles(this, styles, new SequenceUpdateRange(startLine, endLine));
+        }
+    }
+
     /**
      * Compute code blocks
+     *
      * @param text The text. can be safely accessed.
      */
     public abstract List<CodeBlock> computeBlocks(Content text, CodeBlockAnalyzeDelegate delegate);
@@ -162,176 +195,12 @@ public abstract class AsyncIncrementalAnalyzeManager<S, T> implements Incrementa
         return extraArguments;
     }
 
-    /**
-     * Helper class for analyzing code block
-     */
-    public class CodeBlockAnalyzeDelegate {
-
-        private final LooperThread thread;
-        int suppressSwitch;
-
-        CodeBlockAnalyzeDelegate(@NonNull LooperThread lp) {
-            thread = lp;
+    public Styles getManagedStyles() {
+        var thread = Thread.currentThread();
+        if (thread.getClass() != AsyncIncrementalAnalyzeManager.LooperThread.class) {
+            throw new IllegalThreadStateException();
         }
-
-        public void setSuppressSwitch(int suppressSwitch) {
-            this.suppressSwitch = suppressSwitch;
-        }
-
-        void reset() {
-            suppressSwitch = Integer.MAX_VALUE;
-        }
-
-        public boolean isCancelled() {
-            return thread.myRunCount != runCount;
-        }
-
-        public boolean isNotCancelled() {
-            return thread.myRunCount == runCount;
-        }
-
-    }
-
-    private class LooperThread extends Thread {
-
-        volatile boolean abort;
-        Looper looper;
-        Handler handler;
-        Content shadowed;
-        long myRunCount;
-
-        List<LineTokenizeResult<S, T>> states = new ArrayList<>();
-        Styles styles;
-        LockedSpans spans;
-        Runnable callback;
-        CodeBlockAnalyzeDelegate delegate = new CodeBlockAnalyzeDelegate(this);
-
-        public LooperThread(Runnable callback) {
-            this.callback = callback;
-        }
-
-        private void tryUpdate() {
-            if (!abort)
-                sendUpdate(styles);
-        }
-
-        private void initialize() {
-            styles = new Styles(spans = new LockedSpans());
-            S state = getInitialState();
-            var mdf = spans.modify();
-            for (int i = 0;i < shadowed.getLineCount();i++) {
-                var line = shadowed.getLine(i);
-                var result = tokenizeLine(line, state);
-                state = result.state;
-                var spans = result.spans != null ? result. spans :generateSpansForLine(result);
-                states.add(result.clearSpans());
-                mdf.addLineAt(i, spans);
-            }
-            styles.blocks = computeBlocks(shadowed, delegate);
-            styles.setSuppressSwitch(delegate.suppressSwitch);
-            tryUpdate();
-        }
-
-        @Override
-        public void run() {
-            Looper.prepare();
-            looper = Looper.myLooper();
-            handler = new Handler(looper) {
-
-                @Override
-                public void handleMessage(@NonNull Message msg) {
-                    super.handleMessage(msg);
-                    try {
-                        myRunCount = runCount;
-                        delegate.reset();
-                        switch (msg.what) {
-                            case MSG_INIT:
-                                shadowed = (Content) msg.obj;
-                                if (!abort) {
-                                    initialize();
-                                }
-                                break;
-                            case MSG_MOD:
-                                if (!abort) {
-                                    var mod = (TextModification) msg.obj;
-                                    int startLine = IntPair.getFirst(mod.start);
-                                    int endLine = IntPair.getFirst(mod.end);
-                                    if (mod.changedText == null) {
-                                        shadowed.delete(IntPair.getFirst(mod.start), IntPair.getSecond(mod.start),
-                                                IntPair.getFirst(mod.end), IntPair.getSecond(mod.end));
-                                        S state = startLine == 0 ? getInitialState() : states.get(startLine - 1).state;
-                                        // Remove states
-                                        if (endLine >= startLine + 1) {
-                                            states.subList(startLine + 1, endLine + 1).clear();
-                                        }
-                                        var mdf = spans.modify();
-                                        for (int i = startLine + 1;i <= endLine;i++) {
-                                            mdf.deleteLineAt(startLine + 1);
-                                        }
-                                        int line = startLine;
-                                        while (line < shadowed.getLineCount()){
-                                            var res = tokenizeLine(shadowed.getLine(line), state);
-                                            mdf.setSpansOnLine(line, res.spans != null ? res.spans : generateSpansForLine(res));
-                                            var old = states.set(line, res.clearSpans());
-                                            if (stateEquals(old.state, res.state)) {
-                                                break;
-                                            }
-                                            state = res.state;
-                                            line ++;
-                                        }
-                                    } else {
-                                        shadowed.insert(IntPair.getFirst(mod.start), IntPair.getSecond(mod.start), mod.changedText);
-                                        S state = startLine == 0 ? getInitialState() : states.get(startLine - 1).state;
-                                        int line = startLine;
-                                        var spans = styles.spans.modify();
-                                        // Add Lines
-                                        while (line <= endLine) {
-                                            var res = tokenizeLine(shadowed.getLine(line), state);
-                                            if (line == startLine) {
-                                                spans.setSpansOnLine(line, res.spans != null ? res.spans : generateSpansForLine(res));
-                                                states.set(line, res.clearSpans());
-                                            } else {
-                                                spans.addLineAt(line, res.spans != null ? res.spans : generateSpansForLine(res));
-                                                states.add(line, res.clearSpans());
-                                            }
-                                            state = res.state;
-                                            line++;
-                                        }
-                                        // line = end.line + 1, check whether the state equals
-                                        while (line < shadowed.getLineCount()) {
-                                            var res = tokenizeLine(shadowed.getLine(line), state);
-                                            if (stateEquals(res.state, states.get(line).state)) {
-                                                break;
-                                            } else {
-                                                spans.setSpansOnLine(line, res.spans != null ? res.spans : generateSpansForLine(res));
-                                                states.set(line, res.clearSpans());
-                                            }
-                                            line ++;
-                                        }
-                                    }
-                                }
-                                styles.blocks = computeBlocks(shadowed, delegate);
-                                styles.setSuppressSwitch(delegate.suppressSwitch);
-                                tryUpdate();
-                                break;
-                            case MSG_EXIT:
-                                looper.quit();
-                                break;
-                        }
-                    } catch (Exception e) {
-                        Log.w("AsyncAnalysis", "Thread " + Thread.currentThread().getName() + " failed", e);
-                    }
-                }
-
-            };
-
-            try {
-                callback.run();
-                Looper.loop();
-            } catch (CancelledException e) {
-                //ignored
-            }
-        }
+        return ((AsyncIncrementalAnalyzeManager<?, ?>.LooperThread) thread).styles;
     }
 
     private static class LockedSpans implements Spans {
@@ -369,7 +238,7 @@ public abstract class AsyncIncrementalAnalyzeManager<S, T> implements Incrementa
             return new ModifierImpl();
         }
 
-        @Override 
+        @Override
         public boolean supportsModify() {
             return true;
         }
@@ -395,12 +264,7 @@ public abstract class AsyncIncrementalAnalyzeManager<S, T> implements Incrementa
             private Line line;
 
             public void moveToLine(int line) {
-                if (line < 0) {
-                    if (this.line != null) {
-                        this.line.lock.unlock();
-                    }
-                    this.line = null;
-                } else if (line >= lines.size()) {
+                if (line < 0 || line >= lines.size()) {
                     if (this.line != null) {
                         this.line.lock.unlock();
                     }
@@ -414,6 +278,7 @@ public abstract class AsyncIncrementalAnalyzeManager<S, T> implements Incrementa
                         locked = lock.tryLock(100, TimeUnit.MICROSECONDS);
                     } catch (InterruptedException e) {
                         e.printStackTrace();
+                        Thread.currentThread().interrupt();
                     }
                     if (locked) {
                         try {
@@ -544,7 +409,212 @@ public abstract class AsyncIncrementalAnalyzeManager<S, T> implements Incrementa
         }
     }
 
-    private static class CancelledException extends RuntimeException {}
+    /**
+     * Helper class for analyzing code block
+     */
+    public class CodeBlockAnalyzeDelegate {
+
+        private final LooperThread thread;
+        int suppressSwitch;
+
+        CodeBlockAnalyzeDelegate(@NonNull LooperThread lp) {
+            thread = lp;
+        }
+
+        public void setSuppressSwitch(int suppressSwitch) {
+            this.suppressSwitch = suppressSwitch;
+        }
+
+        void reset() {
+            suppressSwitch = Integer.MAX_VALUE;
+        }
+
+        public boolean isCancelled() {
+            return thread.myRunCount != runCount || thread.abort || thread.isInterrupted();
+        }
+
+        public boolean isNotCancelled() {
+            return !isCancelled();
+        }
+
+    }
+
+    private final class LooperThread extends Thread {
+
+        private final BlockingQueue<Message> messageQueue = new LinkedBlockingQueue<>();
+        volatile boolean abort;
+        Content shadowed;
+        long myRunCount;
+
+        List<LineTokenizeResult<S, T>> states = new ArrayList<>();
+        Styles styles;
+        LockedSpans spans;
+        CodeBlockAnalyzeDelegate delegate = new CodeBlockAnalyzeDelegate(this);
+
+        public void offerMessage(int what, @Nullable Object obj) {
+            var msg = Message.obtain();
+            msg.what = what;
+            msg.obj = obj;
+            offerMessage(msg);
+        }
+
+        public void offerMessage(@NonNull Message msg) {
+            // Result ignored: capacity is enough as it is INT_MAX
+            //noinspection ResultOfMethodCallIgnored
+            messageQueue.offer(msg);
+        }
+
+        private void initialize() {
+            styles = new Styles(spans = new LockedSpans());
+            S state = getInitialState();
+            var mdf = spans.modify();
+            for (int i = 0; i < shadowed.getLineCount() && !abort && !isInterrupted(); i++) {
+                var line = shadowed.getLine(i);
+                var result = tokenizeLine(line, state, i);
+                state = result.state;
+                var spans = result.spans != null ? result.spans : generateSpansForLine(result);
+                states.add(result.clearSpans());
+                onAddState(result.state);
+                mdf.addLineAt(i, spans);
+            }
+            styles.blocks = computeBlocks(shadowed, delegate);
+            styles.setSuppressSwitch(delegate.suppressSwitch);
+            if (!abort)
+                sendNewStyles(styles);
+        }
+
+        public boolean handleMessage(@NonNull Message msg) {
+            try {
+                myRunCount = runCount;
+                delegate.reset();
+                switch (msg.what) {
+                    case MSG_INIT:
+                        shadowed = (Content) msg.obj;
+                        if (!abort && !isInterrupted()) {
+                            initialize();
+                        }
+                        break;
+                    case MSG_MOD:
+                        int updateStart = 0, updateEnd = 0;
+                        if (!abort && !isInterrupted()) {
+                            var mod = (TextModification) msg.obj;
+                            int startLine = IntPair.getFirst(mod.start);
+                            int endLine = IntPair.getFirst(mod.end);
+
+                            updateStart = startLine;
+                            if (mod.changedText == null) {
+                                shadowed.delete(IntPair.getFirst(mod.start), IntPair.getSecond(mod.start),
+                                        IntPair.getFirst(mod.end), IntPair.getSecond(mod.end));
+                                S state = startLine == 0 ? getInitialState() : states.get(startLine - 1).state;
+                                // Remove states
+                                if (endLine >= startLine + 1) {
+                                    var subList = states.subList(startLine + 1, endLine + 1);
+                                    for (LineTokenizeResult<S, T> stLineTokenizeResult : subList) {
+                                        onAbandonState(stLineTokenizeResult.state);
+                                    }
+                                    subList.clear();
+                                }
+                                var mdf = spans.modify();
+                                for (int i = startLine + 1; i <= endLine; i++) {
+                                    mdf.deleteLineAt(startLine + 1);
+                                }
+                                int line = startLine;
+                                while (line < shadowed.getLineCount()) {
+                                    var res = tokenizeLine(shadowed.getLine(line), state, line);
+                                    mdf.setSpansOnLine(line, res.spans != null ? res.spans : generateSpansForLine(res));
+                                    var old = states.set(line, res.clearSpans());
+                                    if (old != null) {
+                                        onAbandonState(old.state);
+                                    }
+                                    onAddState(res.state);
+                                    if (stateEquals(old == null ? null : old.state, res.state)) {
+                                        break;
+                                    }
+                                    state = res.state;
+                                    line++;
+                                }
+                                updateEnd = line;
+                            } else {
+                                shadowed.insert(IntPair.getFirst(mod.start), IntPair.getSecond(mod.start), mod.changedText);
+                                S state = startLine == 0 ? getInitialState() : states.get(startLine - 1).state;
+                                int line = startLine;
+                                var spans = styles.spans.modify();
+                                // Add Lines
+                                while (line <= endLine) {
+                                    var res = tokenizeLine(shadowed.getLine(line), state, line);
+                                    if (line == startLine) {
+                                        spans.setSpansOnLine(line, res.spans != null ? res.spans : generateSpansForLine(res));
+                                        var old = states.set(line, res.clearSpans());
+                                        if (old != null) {
+                                            onAbandonState(old.state);
+                                        }
+                                    } else {
+                                        spans.addLineAt(line, res.spans != null ? res.spans : generateSpansForLine(res));
+                                        states.add(line, res.clearSpans());
+                                    }
+                                    onAddState(res.state);
+                                    state = res.state;
+                                    line++;
+                                }
+                                // line = end.line + 1, check whether the state equals
+                                boolean flag = true;
+                                while (line < shadowed.getLineCount() && flag) {
+                                    var res = tokenizeLine(shadowed.getLine(line), state, line);
+                                    if (stateEquals(res.state, states.get(line).state)) {
+                                        flag = false;
+                                    }
+                                    spans.setSpansOnLine(line, res.spans != null ? res.spans : generateSpansForLine(res));
+                                    var old = states.set(line, res.clearSpans());
+                                    if (old != null) {
+                                        onAbandonState(old.state);
+                                    }
+                                    onAddState(res.state);
+                                    state = res.state;
+                                    line++;
+                                }
+                                updateEnd = line;
+                            }
+                        }
+                        // Do not update incomplete code blocks
+                        var blocks = computeBlocks(shadowed, delegate);
+                        if (delegate.isNotCancelled()) {
+                            styles.blocks = blocks;
+                            styles.setSuppressSwitch(delegate.suppressSwitch);
+                        }
+                        if (!abort) {
+                            sendUpdate(styles, updateStart, updateEnd);
+                        }
+                        break;
+                }
+                return true;
+            } catch (Exception e) {
+                Log.w("AsyncAnalysis", "Thread " + Thread.currentThread().getName() + " failed", e);
+            }
+            return false;
+        }
+
+        @Override
+        public void run() {
+            try {
+                while (!abort && !isInterrupted()) {
+                    var msg = messageQueue.take();
+                    if (!handleMessage(msg)) {
+                        break;
+                    }
+                    msg.recycle();
+                }
+            } catch (InterruptedException e) {
+                // ignored
+            }
+        }
+    }
+
+
+    public interface ReceiverConsumer {
+
+        void accept(@NonNull StyleReceiver receiver);
+
+    }
 
 
 }

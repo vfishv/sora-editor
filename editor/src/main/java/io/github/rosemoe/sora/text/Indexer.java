@@ -1,7 +1,7 @@
 /*
  *    sora-editor - the awesome code editor for Android
  *    https://github.com/Rosemoe/sora-editor
- *    Copyright (C) 2020-2022  Rosemoe
+ *    Copyright (C) 2020-2023  Rosemoe
  *
  *     This library is free software; you can redistribute it and/or
  *     modify it under the terms of the GNU Lesser General Public
@@ -77,14 +77,14 @@ public interface Indexer {
     CharPosition getCharPosition(int line, int column);
 
     /**
-     * @see #getCharPosition(int)
      * @param dest Destination of result
+     * @see #getCharPosition(int)
      */
     void getCharPosition(int index, @NonNull CharPosition dest);
 
     /**
-     * @see #getCharPosition(int, int)
      * @param dest Destination of result
+     * @see #getCharPosition(int, int)
      */
     void getCharPosition(int line, int column, @NonNull CharPosition dest);
 

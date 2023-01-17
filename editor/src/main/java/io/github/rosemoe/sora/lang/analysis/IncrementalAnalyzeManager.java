@@ -1,7 +1,7 @@
 /*
  *    sora-editor - the awesome code editor for Android
  *    https://github.com/Rosemoe/sora-editor
- *    Copyright (C) 2020-2022  Rosemoe
+ *    Copyright (C) 2020-2023  Rosemoe
  *
  *     This library is free software; you can redistribute it and/or
  *     modify it under the terms of the GNU Lesser General Public
@@ -32,6 +32,7 @@ import io.github.rosemoe.sora.lang.styling.Span;
 
 /**
  * Interface for line based analyze managers
+ *
  * @param <S> State type at line endings
  * @param <T> Token type
  */
@@ -55,13 +56,25 @@ public interface IncrementalAnalyzeManager<S, T> extends AnalyzeManager {
 
     /**
      * Tokenize for the given line
+     *
+     * @param lineIndex -1 for unknown
      */
-    LineTokenizeResult<S, T> tokenizeLine(CharSequence line, S state);
+    LineTokenizeResult<S, T> tokenizeLine(CharSequence line, S state, int lineIndex);
 
     /**
      * Generate spans for the line
      */
     List<Span> generateSpansForLine(LineTokenizeResult<S, T> tokens);
+
+    /**
+     * Called when a State object is to be abandoned
+     */
+    void onAbandonState(S state);
+
+    /**
+     * Called when a State object is to be added
+     */
+    void onAddState(S state);
 
     /**
      * Saved state
@@ -101,7 +114,6 @@ public interface IncrementalAnalyzeManager<S, T> extends AnalyzeManager {
         }
 
     }
-
 
 
 }

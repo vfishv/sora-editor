@@ -1,7 +1,7 @@
 /*
  *    sora-editor - the awesome code editor for Android
  *    https://github.com/Rosemoe/sora-editor
- *    Copyright (C) 2020-2022  Rosemoe
+ *    Copyright (C) 2020-2023  Rosemoe
  *
  *     This library is free software; you can redistribute it and/or
  *     modify it under the terms of the GNU Lesser General Public
@@ -32,16 +32,17 @@ public class BlocksUpdater {
 
     /**
      * Update blocks
+     *
      * @param blocks   Block lines to update
      * @param restrict Min line to update
-     * @param delta Delta for line index
+     * @param delta    Delta for line index
      */
     public static void update(List<CodeBlock> blocks, int restrict, int delta) {
         if (delta == 0) {
             return;
         }
         var itr = blocks.iterator();
-        while(itr.hasNext()) {
+        while (itr.hasNext()) {
             var block = itr.next();
             if (block.startLine >= restrict) {
                 block.startLine += delta;

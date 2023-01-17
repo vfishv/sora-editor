@@ -1,7 +1,7 @@
 /*
  *    sora-editor - the awesome code editor for Android
  *    https://github.com/Rosemoe/sora-editor
- *    Copyright (C) 2020-2022  Rosemoe
+ *    Copyright (C) 2020-2023  Rosemoe
  *
  *     This library is free software; you can redistribute it and/or
  *     modify it under the terms of the GNU Lesser General Public
@@ -28,6 +28,7 @@ import android.view.inputmethod.ExtractedTextRequest;
 import android.widget.OverScroller;
 
 import androidx.annotation.FloatRange;
+import androidx.annotation.IntRange;
 import androidx.annotation.NonNull;
 
 import java.io.Serializable;
@@ -36,7 +37,7 @@ import io.github.rosemoe.sora.annotations.InvalidateRequired;
 
 /**
  * Direct-access properties.
- *
+ * <p>
  * This object saves some feature settings of editor. These features are not accessed unless the user
  * does something that requires to check the state of the feature. So we save them here by public fields
  * so that you can modify them easily and do not have to call so many methods.
@@ -44,22 +45,26 @@ import io.github.rosemoe.sora.annotations.InvalidateRequired;
 public class DirectAccessProps implements Serializable {
 
     /**
+     * Define symbol pairs for any language,
+     * Override language settings.
+     */
+    @NonNull
+    public final SymbolPairMatch overrideSymbolPairs = new SymbolPairMatch();
+    /**
      * If set to be true, the editor will delete the whole line if the current line is empty (only tabs or spaces)
      * when the users press the DELETE key.
-     *
+     * <p>
      * Default value is {@code true}
      */
     public boolean deleteEmptyLineFast = true;
-
     /**
      * Delete multiple spaces at a time when the user press the DELETE key.
      * This only takes effect when selection is in leading spaces.
-     *
+     * <p>
      * Default Value: {@code 1}  -> The editor will always delete only 1 space.
      * Special Value: {@code -1} -> Follow tab size
      */
     public int deleteMultiSpaces = 1;
-
     /**
      * Set to {@code false} if you don't want the editor to go fullscreen on devices with smaller screen size.
      * Otherwise, set to {@code true}
@@ -67,17 +72,15 @@ public class DirectAccessProps implements Serializable {
      * Default value is {@code false}
      */
     public boolean allowFullscreen = false;
-
     /**
      * Control whether auto-completes for symbol pairs.
-     *
+     * <p>
      * Such as automatically adding a ')' when '(' is entered
      */
     public boolean symbolPairAutoCompletion = true;
-
     /**
      * Show auto-completion even when there is composing text set by the IME in editor.
-     *
+     * <p>
      * Note: composing text is usually a small piece of text you are typing. It is displayed with an
      * underline in editor.
      * This is useful when the user uses an input method that does not support the attitude {@link EditorInfo#TYPE_TEXT_FLAG_NO_SUGGESTIONS}.
@@ -85,30 +88,22 @@ public class DirectAccessProps implements Serializable {
      * when there is any composing text in editor.
      */
     public boolean autoCompletionOnComposing = true;
-
     /**
      * Set whether auto indent should be executed when user enters
      * a NEWLINE.
-     *
+     * <p>
      * Enabling this will automatically copy the leading spaces on this line to the new line.
      */
     public boolean autoIndent = true;
-
-    /**
-     * Define symbol pairs for any language,
-     * Override language settings.
-     * <p>
-     * Use {@link SymbolPairMatch.Replacement#NO_REPLACEMENT} to force no completion for a character
-     */
-    @NonNull
-    public final SymbolPairMatch overrideSymbolPairs = new SymbolPairMatch();
-
     /**
      * Disallow suggestions from keyboard forcibly by preventing
      * {@link android.view.inputmethod.InputConnection#setComposingText(CharSequence, int)} and
      * {@link android.view.inputmethod.InputConnection#setComposingRegion(int, int)} taking effects.
      * <p>
      * This may not be always good for all IMEs, as keyboards' strategy varies.
+     * <p>
+     * Update: this will cause input connection to be negative and forcibly reject composing texts by
+     * restarting inputs.
      */
     public boolean disallowSuggestions = false;
 
@@ -124,6 +119,7 @@ public class DirectAccessProps implements Serializable {
      * <p>
      * Set it to 0 to send no text to IME.
      */
+    @IntRange(from = 0)
     public int maxIPCTextLength = 500000;
 
     /**
@@ -158,7 +154,7 @@ public class DirectAccessProps implements Serializable {
 
     /**
      * Wave length of problem indicators.
-     *
+     * <p>
      * Unit DIP.
      */
     @InvalidateRequired
@@ -167,16 +163,16 @@ public class DirectAccessProps implements Serializable {
 
     /**
      * Wave width of problem indicators.
-     *
+     * <p>
      * Unit DIP.
      */
     @InvalidateRequired
     @FloatRange(from = 0.0f, fromInclusive = false)
-    public float indicatorWaveWidth = 0.6f;
+    public float indicatorWaveWidth = 0.9f;
 
     /**
      * Wave amplitude of problem indicators.
-     *
+     * <p>
      * Unit DIP.
      */
     @InvalidateRequired
@@ -185,7 +181,7 @@ public class DirectAccessProps implements Serializable {
 
     /**
      * Compare the text to commit with composing text.
-     *
+     * <p>
      * See detailed issue: #155
      */
     public boolean trackComposingTextOnCommit = true;
@@ -198,8 +194,134 @@ public class DirectAccessProps implements Serializable {
 
     /**
      * Cache RenderNode of long text lines
-     * This costs some memory, but improves performance.
+     * This costs some memory, but improves performance when the line is not too long.
      */
-    public boolean cacheRenderNodeForLongLines = true;
+    public boolean cacheRenderNodeForLongLines = false;
+
+    /**
+     * Use the ICU library to find range of words on double tap or long press.
+     */
+    public boolean useICULibToSelectWords = true;
+
+    /**
+     * Highlight matching delimiters. This requires language support.
+     */
+    @InvalidateRequired
+    public boolean highlightMatchingDelimiters = true;
+
+    /**
+     * Make matching delimiters bold
+     */
+    @InvalidateRequired
+    public boolean boldMatchingDelimiters = true;
+
+    /**
+     * Whether the editor will use round rectangle for text background
+     */
+    @InvalidateRequired
+    public boolean enableRoundTextBackground = true;
+
+    /**
+     * The text background wraps the actual text, but not the whole line
+     */
+    @InvalidateRequired
+    public boolean textBackgroundWrapTextOnly = false;
+
+    /**
+     * The new cursor position when the user exits selecting mode.
+     * {@code true} for the current right cursor
+     * {@code false} for the current left cursor
+     */
+    public boolean positionOfCursorWhenExitSelecting = true;
+
+    /**
+     * Draw custom line background color (specified by {@link io.github.rosemoe.sora.lang.styling.line.LineBackground})
+     * on current line
+     */
+    @InvalidateRequired
+    public boolean drawCustomLineBgOnCurrentLine = false;
+
+    /**
+     * The factor of round rectangle, affecting the corner radius of the resulting display
+     */
+    @InvalidateRequired
+    public float roundTextBackgroundFactor = 0.13f;
+
+    /**
+     * Specify the icon size factor. result size = row height * sideIconSizeFactor
+     */
+    @InvalidateRequired
+    @FloatRange(from = 0.0f, to = 1.0f)
+    public float sideIconSizeFactor = 0.7f;
+
+    /**
+     * Specify the marker text size factor, such as hardwrap markers.
+     * not available for setting now
+     */
+    @InvalidateRequired
+    @FloatRange(from = 0.0f, to = 1.0f)
+    public final float miniMarkerSizeFactor = 0.85f;
+
+    /**
+     * Specify editor behavior when line number is clicked.
+     *
+     * @see #LN_ACTION_NOTHING
+     * @see #LN_ACTION_SELECT_LINE
+     * @see #LN_ACTION_PLACE_SELECTION_HOME
+     */
+    public int actionWhenLineNumberClicked = LN_ACTION_PLACE_SELECTION_HOME;
+    /**
+     * Do nothing
+     */
+    public final static int LN_ACTION_NOTHING = 0;
+    /**
+     * Select the whole line
+     */
+    public final static int LN_ACTION_SELECT_LINE = 1;
+    /**
+     * Set selection to line start
+     */
+    public final static int LN_ACTION_PLACE_SELECTION_HOME = 2;
+
+    /**
+     * Format pasted text (when text is pasted by {@link CodeEditor#pasteText()})
+     */
+    public boolean formatPastedText = false;
+
+    /**
+     * Use enhanced function of home and end. When it is enabled, clicking home will place
+     * the selection to actually text start on the line if the selection is currently at the start
+     * of line. End works in similar way, too.
+     */
+    public boolean enhancedHomeAndEnd = true;
+
+    /**
+     * Show hard wrap marker near the column. (a reminder for starting a new line)
+     * Use 0 or negative number for no marker
+     */
+    @InvalidateRequired
+    public int hardwrapColumn = 0;
+
+    /**
+     * Select words even if some texts are already selected when the editor is
+     * long-pressed.
+     * If true, new text under the new long-press will be selected. Otherwise, the old text is kept
+     * selected.
+     */
+    public boolean reselectOnLongPress = true;
+
+    /**
+     * Show selection above selection handle when text is selected
+     */
+    @InvalidateRequired
+    public boolean showSelectionWhenSelected = false;
+
+    /**
+     * Limit length for copying text to clipboard. When the length of copying text exceeded the limit,
+     * copying is aborted and a toast tip is shown to notify user that the action is failed.
+     * <p>
+     * Default size is 512*1024 Java characters, which is 1MB in UTF-16 encoding
+     */
+    public int clipboardTextLengthLimit = 512 * 1024;
 
 }

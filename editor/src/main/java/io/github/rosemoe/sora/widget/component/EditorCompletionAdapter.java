@@ -1,7 +1,7 @@
 /*
  *    sora-editor - the awesome code editor for Android
  *    https://github.com/Rosemoe/sora-editor
- *    Copyright (C) 2020-2022  Rosemoe
+ *    Copyright (C) 2020-2023  Rosemoe
  *
  *     This library is free software; you can redistribute it and/or
  *     modify it under the terms of the GNU Lesser General Public
@@ -29,9 +29,12 @@ import android.view.ViewGroup;
 import android.widget.Adapter;
 import android.widget.BaseAdapter;
 
+import androidx.annotation.NonNull;
+
 import java.util.List;
 
 import io.github.rosemoe.sora.lang.completion.CompletionItem;
+import io.github.rosemoe.sora.widget.schemes.EditorColorScheme;
 
 /**
  * A class to make custom adapter for auto-completion window
@@ -41,20 +44,20 @@ import io.github.rosemoe.sora.lang.completion.CompletionItem;
  */
 public abstract class EditorCompletionAdapter extends BaseAdapter implements Adapter {
 
-    private EditorAutoCompletion mWindow;
-    private List<CompletionItem> mItems;
+    private EditorAutoCompletion window;
+    private List<CompletionItem> items;
 
     /**
      * Called by {@link EditorAutoCompletion} to attach some arguments
      */
-    public void attachValues(EditorAutoCompletion window, List<CompletionItem> items) {
-        mWindow = window;
-        mItems = items;
+    public void attachValues(@NonNull EditorAutoCompletion window, @NonNull List<CompletionItem> items) {
+        this.window = window;
+        this.items = items;
     }
 
     @Override
     public CompletionItem getItem(int position) {
-        return mItems.get(position);
+        return items.get(position);
     }
 
     @Override
@@ -64,31 +67,50 @@ public abstract class EditorCompletionAdapter extends BaseAdapter implements Ada
 
     @Override
     public int getCount() {
-        return mItems == null ? 0 : mItems.size();
+        return items == null ? 0 : items.size();
     }
 
     @Override
     public View getView(int position, View convertView, ViewGroup parent) {
-        return getView(position, convertView, parent, position == mWindow.getCurrentPosition());
+        return getView(position, convertView, parent, position == window.getCurrentPosition());
+    }
+
+    /**
+     * Get color scheme in editor
+     */
+    @NonNull
+    protected EditorColorScheme getColorScheme() {
+        return window.getEditor().getColorScheme();
+    }
+
+    /**
+     * Get theme color from current color scheme
+     *
+     * @param type Type of color. Refer to {@link EditorColorScheme}
+     * @see EditorColorScheme#getColor(int)
+     */
+    protected int getThemeColor(int type) {
+        return getColorScheme().getColor(type);
     }
 
     /**
      * Get context from editor
      */
+    @NonNull
     protected Context getContext() {
-        return mWindow.getContext();
+        return window.getContext();
     }
 
     /**
      * Implementation of this class should provide exact height of its item
-     *
+     * <p>
      * The value will be used to calculate the height of completion window
      */
     public abstract int getItemHeight();
 
     /**
-     * @see BaseAdapter#getView(int, View, ViewGroup)
      * @param isCurrentCursorPosition Is the {@param position} currently selected
+     * @see BaseAdapter#getView(int, View, ViewGroup)
      */
     protected abstract View getView(int position, View convertView, ViewGroup parent, boolean isCurrentCursorPosition);
 

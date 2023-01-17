@@ -1,7 +1,7 @@
 /*
  *    sora-editor - the awesome code editor for Android
  *    https://github.com/Rosemoe/sora-editor
- *    Copyright (C) 2020-2022  Rosemoe
+ *    Copyright (C) 2020-2023  Rosemoe
  *
  *     This library is free software; you can redistribute it and/or
  *     modify it under the terms of the GNU Lesser General Public
@@ -23,16 +23,20 @@
  */
 package io.github.rosemoe.sora.event;
 
+import androidx.annotation.NonNull;
+
 import io.github.rosemoe.sora.text.CharPosition;
 import io.github.rosemoe.sora.widget.CodeEditor;
 
 /**
  * This event happens when {@link CodeEditor#setText(CharSequence)} is called or
  * user edited the displaying content.
- *
+ * <p>
  * Note that you should not update the content at this time. Otherwise, there might be some
  * exceptions causing the editor framework to crash. If you do need to update the content, you should
  * post your actions to the main thread so that the user's modification will be successful.
+ *
+ * @author Rosemoe
  */
 public class ContentChangeEvent extends Event {
 
@@ -56,7 +60,7 @@ public class ContentChangeEvent extends Event {
     private final CharPosition mEnd;
     private final CharSequence mTextChanged;
 
-    public ContentChangeEvent(CodeEditor editor, int action, CharPosition changeStart, CharPosition changeEnd, CharSequence textChanged) {
+    public ContentChangeEvent(@NonNull CodeEditor editor, int action, @NonNull CharPosition changeStart, @NonNull CharPosition changeEnd, @NonNull CharSequence textChanged) {
         super(editor);
         mAction = action;
         mStart = changeStart;
@@ -66,6 +70,7 @@ public class ContentChangeEvent extends Event {
 
     /**
      * Get action code of the event.
+     *
      * @see #ACTION_SET_NEW_TEXT
      * @see #ACTION_INSERT
      * @see #ACTION_DELETE
@@ -76,18 +81,20 @@ public class ContentChangeEvent extends Event {
 
     /**
      * Return the CharPosition indicating the start of changed region.
-     *
+     * <p>
      * Note that you can not modify the values in the returned instance.
      */
+    @NonNull
     public CharPosition getChangeStart() {
         return mStart;
     }
 
     /**
      * Return the CharPosition indicating the end of changed region.
-     *
+     * <p>
      * Note that you can not modify the values in the returned instance.
      */
+    @NonNull
     public CharPosition getChangeEnd() {
         return mEnd;
     }
@@ -98,6 +105,7 @@ public class ContentChangeEvent extends Event {
      * If action is {@link #ACTION_INSERT}, inserted text is the result.
      * If action is {@link #ACTION_DELETE}, deleted text is the result.
      */
+    @NonNull
     public CharSequence getChangedText() {
         return mTextChanged;
     }

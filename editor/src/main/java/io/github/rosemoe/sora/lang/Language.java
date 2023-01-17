@@ -1,7 +1,7 @@
 /*
  *    sora-editor - the awesome code editor for Android
  *    https://github.com/Rosemoe/sora-editor
- *    Copyright (C) 2020-2022  Rosemoe
+ *    Copyright (C) 2020-2023  Rosemoe
  *
  *     This library is free software; you can redistribute it and/or
  *     modify it under the terms of the GNU Lesser General Public
@@ -34,9 +34,11 @@ import io.github.rosemoe.sora.lang.analysis.AnalyzeManager;
 import io.github.rosemoe.sora.lang.completion.CompletionCancelledException;
 import io.github.rosemoe.sora.lang.completion.CompletionHelper;
 import io.github.rosemoe.sora.lang.completion.CompletionPublisher;
+import io.github.rosemoe.sora.lang.format.Formatter;
 import io.github.rosemoe.sora.lang.smartEnter.NewlineHandler;
 import io.github.rosemoe.sora.text.CharPosition;
 import io.github.rosemoe.sora.text.ContentReference;
+import io.github.rosemoe.sora.widget.CodeEditor;
 import io.github.rosemoe.sora.widget.SymbolPairMatch;
 
 /**
@@ -56,24 +58,24 @@ public interface Language {
 
     /**
      * Set the thread's interrupted flag by calling {@link Thread#interrupt()}.
-     *
-     * Throw {@link io.github.rosemoe.sora.lang.completion.CompletionCancelledException} exceptions
+     * <p>
+     * Throw {@link CompletionCancelledException} exceptions
      * from {@link ContentReference} and {@link CompletionPublisher}.
-     *
+     * <p>
      * Set thread's flag for abortion.
      */
     int INTERRUPTION_LEVEL_STRONG = 0;
     /**
-     * Throw {@link io.github.rosemoe.sora.lang.completion.CompletionCancelledException} exceptions
+     * Throw {@link CompletionCancelledException} exceptions
      * from {@link ContentReference} and {@link CompletionPublisher}.
-     *
+     * <p>
      * Set thread's flag for abortion.
      */
     int INTERRUPTION_LEVEL_SLIGHT = 1;
     /**
-     * Throw {@link io.github.rosemoe.sora.lang.completion.CompletionCancelledException} exceptions
+     * Throw {@link CompletionCancelledException} exceptions
      * from {@link ContentReference}
-     *
+     * <p>
      * Set thread's flag for abortion.
      */
     int INTERRUPTION_LEVEL_NONE = 2;
@@ -98,19 +100,19 @@ public interface Language {
      * Request to auto-complete the code at the given {@code position}.
      * This is called in a worker thread other than UI thread.
      *
+     * @param content        Read-only reference of content
+     * @param position       The position for auto-complete
+     * @param publisher      The publisher used to update items
+     * @param extraArguments Arguments set by {@link CodeEditor#setText(CharSequence, Bundle)}
+     * @throws io.github.rosemoe.sora.lang.completion.CompletionCancelledException This thread can be abandoned
+     *                                                                             by the editor framework because the auto-completion items of
+     *                                                                             this invocation are no longer needed by the user. This can either be thrown
+     *                                                                             by {@link ContentReference} or {@link CompletionPublisher}. How the exceptions will be thrown is according to
+     *                                                                             your settings: {@link #getInterruptionLevel()}
      * @see ContentReference
      * @see CompletionPublisher
      * @see #getInterruptionLevel()
      * @see CompletionHelper#checkCancelled()
-     * @param content Read-only reference of content
-     * @param position The position for auto-complete
-     * @param publisher The publisher used to update items
-     * @param extraArguments Arguments set by {@link io.github.rosemoe.sora.widget.CodeEditor#setText(CharSequence, Bundle)}
-     * @throws io.github.rosemoe.sora.lang.completion.CompletionCancelledException This thread can be abandoned
-     * by the editor framework because the auto-completion items of
-     *  this invocation are no longer needed by the user. This can either be thrown
-     * by {@link ContentReference} or {@link CompletionPublisher}. How the exceptions will be thrown is according to
-     * your settings: {@link #getInterruptionLevel()}
      */
     @WorkerThread
     void requireAutoComplete(@NonNull ContentReference content, @NonNull CharPosition position,
@@ -132,28 +134,16 @@ public interface Language {
     @UiThread
     boolean useTab();
 
-    /**
-     * Format the given content
-     *
-     * @param text Content to format
-     * @return Formatted code
-     */
-    @WorkerThread
-    default CharSequence format(CharSequence text) {
-        return null;
-    }
 
     /**
-     * Format the given content from {@code start} position to {@code end} position
-     * <p>
-     * Note: Make sure that you return formatted code in the given region. The original text in this region
-     * will be <strong>replaced</strong> by the returned text.
-     * @return Formatted code from {@code start} to {@code end}.
+     * Get the code formatter for the current language.
+     * The formatter is expected to be the same one during the lifecycle of a language instance.
+     *
+     * @return The code formatter for the current language.
      */
-    @WorkerThread
-    default CharSequence formatRegion(CharSequence text, CharPosition start, CharPosition end) {
-        return null;
-    }
+    @UiThread
+    @NonNull
+    Formatter getFormatter();
 
     /**
      * Returns language specified symbol pairs.
@@ -175,12 +165,28 @@ public interface Language {
     NewlineHandler[] getNewlineHandlers();
 
     /**
+     * Get newline handlers of this language.
+     * This method is called each time the user types a single character (or a single code point)
+     * and some text is currently selected.
+     * <p>
+     * Pay attention to the performance as this method is called frequently
+     *
+     * @return QuickQuoteHandler, maybe null
+     */
+    @UiThread
+    @Nullable
+    default QuickQuoteHandler getQuickQuoteHandler() {
+        return null;
+    }
+
+    /**
      * Destroy this {@link Language} object.
      * <p>
      * When called, you should stop your resource-taking actions and remove any reference
      * of editor or other objects related to editor (such as references to text in editor) to avoid
      * memory leaks and resource waste.
      */
+    @UiThread
     void destroy();
 
 }

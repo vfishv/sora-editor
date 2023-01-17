@@ -1,7 +1,7 @@
 /*
  *    sora-editor - the awesome code editor for Android
  *    https://github.com/Rosemoe/sora-editor
- *    Copyright (C) 2020-2022  Rosemoe
+ *    Copyright (C) 2020-2023  Rosemoe
  *
  *     This library is free software; you can redistribute it and/or
  *     modify it under the terms of the GNU Lesser General Public
@@ -26,7 +26,7 @@ package io.github.rosemoe.sora.lang.completion;
 /**
  * Thrown when the thread is abandoned by the editor framework because the editor do not need its
  * new items anymore.
- *
+ * <p>
  * This can be thrown by {@link io.github.rosemoe.sora.text.ContentReference} and
  * {@link CompletionPublisher}.
  *

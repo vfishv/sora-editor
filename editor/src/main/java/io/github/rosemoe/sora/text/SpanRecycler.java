@@ -1,7 +1,7 @@
 /*
  *    sora-editor - the awesome code editor for Android
  *    https://github.com/Rosemoe/sora-editor
- *    Copyright (C) 2020-2022  Rosemoe
+ *    Copyright (C) 2020-2023  Rosemoe
  *
  *     This library is free software; you can redistribute it and/or
  *     modify it under the terms of the GNU Lesser General Public
@@ -24,6 +24,8 @@
 package io.github.rosemoe.sora.text;
 
 import android.util.Log;
+
+import androidx.annotation.Nullable;
 
 import java.util.List;
 import java.util.concurrent.ArrayBlockingQueue;
@@ -48,7 +50,7 @@ public class SpanRecycler {
         return INSTANCE;
     }
 
-    public void recycle(List<Span> spans) {
+    public void recycle(@Nullable List<Span> spans) {
         if (spans == null) {
             return;
         }

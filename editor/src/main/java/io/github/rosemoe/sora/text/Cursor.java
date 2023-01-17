@@ -1,7 +1,7 @@
 /*
  *    sora-editor - the awesome code editor for Android
  *    https://github.com/Rosemoe/sora-editor
- *    Copyright (C) 2020-2022  Rosemoe
+ *    Copyright (C) 2020-2023  Rosemoe
  *
  *     This library is free software; you can redistribute it and/or
  *     modify it under the terms of the GNU Lesser General Public
@@ -23,6 +23,8 @@
  */
 package io.github.rosemoe.sora.text;
 
+import androidx.annotation.NonNull;
+
 import io.github.rosemoe.sora.util.IntPair;
 
 /**
@@ -32,9 +34,9 @@ import io.github.rosemoe.sora.util.IntPair;
  */
 public final class Cursor {
 
-    private final Content mContent;
-    private final CachedIndexer mIndexer;
-    private CharPosition mLeft, mRight;
+    private final Content content;
+    private final CachedIndexer indexer;
+    private CharPosition leftSel, rightSel;
     private CharPosition cache0, cache1, cache2;
 
     /**
@@ -42,11 +44,11 @@ public final class Cursor {
      *
      * @param content Target content
      */
-    public Cursor(Content content) {
-        mContent = content;
-        mIndexer = new CachedIndexer(content);
-        mLeft = new CharPosition().zero();
-        mRight = new CharPosition().zero();
+    public Cursor(@NonNull Content content) {
+        this.content = content;
+        indexer = new CachedIndexer(content);
+        leftSel = new CharPosition().toBOF();
+        rightSel = new CharPosition().toBOF();
     }
 
     /**
@@ -77,7 +79,7 @@ public final class Cursor {
      * @param column The column position
      */
     public void setLeft(int line, int column) {
-        mLeft = mIndexer.getCharPosition(line, column).fromThis();
+        leftSel = indexer.getCharPosition(line, column).fromThis();
     }
 
     /**
@@ -87,7 +89,7 @@ public final class Cursor {
      * @param column The column position
      */
     public void setRight(int line, int column) {
-        mRight = mIndexer.getCharPosition(line, column).fromThis();
+        rightSel = indexer.getCharPosition(line, column).fromThis();
     }
 
     /**
@@ -96,7 +98,7 @@ public final class Cursor {
      * @return line of left cursor
      */
     public int getLeftLine() {
-        return mLeft.getLine();
+        return leftSel.getLine();
     }
 
     /**
@@ -105,7 +107,7 @@ public final class Cursor {
      * @return column of left cursor
      */
     public int getLeftColumn() {
-        return mLeft.getColumn();
+        return leftSel.getColumn();
     }
 
     /**
@@ -114,7 +116,7 @@ public final class Cursor {
      * @return line of right cursor
      */
     public int getRightLine() {
-        return mRight.getLine();
+        return rightSel.getLine();
     }
 
     /**
@@ -123,7 +125,7 @@ public final class Cursor {
      * @return column of right cursor
      */
     public int getRightColumn() {
-        return mRight.getColumn();
+        return rightSel.getColumn();
     }
 
     /**
@@ -153,7 +155,7 @@ public final class Cursor {
      * @return index of left cursor
      */
     public int getLeft() {
-        return mLeft.index;
+        return leftSel.index;
     }
 
     /**
@@ -162,7 +164,7 @@ public final class Cursor {
      * @return index of right cursor
      */
     public int getRight() {
-        return mRight.index;
+        return rightSel.index;
     }
 
     /**
@@ -175,7 +177,7 @@ public final class Cursor {
      * @param line First visible line
      */
     public void updateCache(int line) {
-        mIndexer.getCharIndex(line, 0);
+        indexer.getCharIndex(line, 0);
     }
 
     /**
@@ -184,7 +186,7 @@ public final class Cursor {
      * @return Using Indexer
      */
     public CachedIndexer getIndexer() {
-        return mIndexer;
+        return indexer;
     }
 
     /**
@@ -193,23 +195,24 @@ public final class Cursor {
      * @return Whether selected
      */
     public boolean isSelected() {
-        return mLeft.index != mRight.index;
+        return leftSel.index != rightSel.index;
     }
 
     /**
      * Get position after moving left once
+     *
      * @param position A packed pair (line, column) describing the original position
      * @return A packed pair (line, column) describing the result position
      */
     public long getLeftOf(long position) {
         int line = IntPair.getFirst(position);
         int column = IntPair.getSecond(position);
-        int n_column = TextLayoutHelper.get().getCurPosLeft(column, mContent.getLine(line));
+        int n_column = TextLayoutHelper.get().getCurPosLeft(column, content.getLine(line));
         if (n_column == column && column == 0) {
             if (line == 0) {
                 return 0;
             } else {
-                int c_column = mContent.getColumnCount(line - 1);
+                int c_column = content.getColumnCount(line - 1);
                 return IntPair.pack(line - 1, c_column);
             }
         } else {
@@ -219,16 +222,17 @@ public final class Cursor {
 
     /**
      * Get position after moving right once
+     *
      * @param position A packed pair (line, column) describing the original position
      * @return A packed pair (line, column) describing the result position
      */
     public long getRightOf(long position) {
         int line = IntPair.getFirst(position);
         int column = IntPair.getSecond(position);
-        int c_column = mContent.getColumnCount(line);
-        int n_column = TextLayoutHelper.get().getCurPosRight(column, mContent.getLine(line));
+        int c_column = content.getColumnCount(line);
+        int n_column = TextLayoutHelper.get().getCurPosRight(column, content.getLine(line));
         if (n_column == c_column && column == n_column) {
-            if (line + 1 == mContent.getLineCount()) {
+            if (line + 1 == content.getLineCount()) {
                 return IntPair.pack(line, c_column);
             } else {
                 return IntPair.pack(line + 1, 0);
@@ -241,15 +245,17 @@ public final class Cursor {
     /**
      * Get copy of left cursor
      */
+    @NonNull
     public CharPosition left() {
-        return mLeft.fromThis();
+        return leftSel.fromThis();
     }
 
     /**
      * Get copy of right cursor
      */
+    @NonNull
     public CharPosition right() {
-        return mRight.fromThis();
+        return rightSel.fromThis();
     }
 
     /**
@@ -259,7 +265,7 @@ public final class Cursor {
      * @param startColumn Start column
      */
     void beforeInsert(int startLine, int startColumn) {
-        cache0 = mIndexer.getCharPosition(startLine, startColumn).fromThis();
+        cache0 = indexer.getCharPosition(startLine, startColumn).fromThis();
     }
 
     /**
@@ -271,15 +277,15 @@ public final class Cursor {
      * @param endColumn   End column
      */
     void beforeDelete(int startLine, int startColumn, int endLine, int endColumn) {
-        cache1 = mIndexer.getCharPosition(startLine, startColumn).fromThis();
-        cache2 = mIndexer.getCharPosition(endLine, endColumn).fromThis();
+        cache1 = indexer.getCharPosition(startLine, startColumn).fromThis();
+        cache2 = indexer.getCharPosition(endLine, endColumn).fromThis();
     }
 
     /**
      * Internal call back before replace
      */
     void beforeReplace() {
-        mIndexer.beforeReplace(mContent);
+        indexer.beforeReplace(content);
     }
 
     /**
@@ -293,13 +299,13 @@ public final class Cursor {
      */
     void afterInsert(int startLine, int startColumn, int endLine, int endColumn,
                      CharSequence insertedContent) {
-        mIndexer.afterInsert(mContent, startLine, startColumn, endLine, endColumn, insertedContent);
+        indexer.afterInsert(content, startLine, startColumn, endLine, endColumn, insertedContent);
         int beginIdx = cache0.getIndex();
         if (getLeft() >= beginIdx) {
-            mLeft = mIndexer.getCharPosition(getLeft() + insertedContent.length()).fromThis();
+            leftSel = indexer.getCharPosition(getLeft() + insertedContent.length()).fromThis();
         }
         if (getRight() >= beginIdx) {
-            mRight = mIndexer.getCharPosition(getRight() + insertedContent.length()).fromThis();
+            rightSel = indexer.getCharPosition(getRight() + insertedContent.length()).fromThis();
         }
     }
 
@@ -314,7 +320,7 @@ public final class Cursor {
      */
     void afterDelete(int startLine, int startColumn, int endLine, int endColumn,
                      CharSequence deletedContent) {
-        mIndexer.afterDelete(mContent, startLine, startColumn, endLine, endColumn, deletedContent);
+        indexer.afterDelete(content, startLine, startColumn, endLine, endColumn, deletedContent);
         int beginIdx = cache1.getIndex();
         int endIdx = cache2.getIndex();
         int left = getLeft();
@@ -323,21 +329,21 @@ public final class Cursor {
             return;
         }
         if (endIdx <= left) {
-            mLeft = mIndexer.getCharPosition(left - (endIdx - beginIdx)).fromThis();
-            mRight = mIndexer.getCharPosition(right - (endIdx - beginIdx)).fromThis();
+            leftSel = indexer.getCharPosition(left - (endIdx - beginIdx)).fromThis();
+            rightSel = indexer.getCharPosition(right - (endIdx - beginIdx)).fromThis();
         } else if (/* endIdx > left && */ endIdx < right) {
             if (beginIdx <= left) {
-                mLeft = mIndexer.getCharPosition(beginIdx).fromThis();
-                mRight = mIndexer.getCharPosition(right - (endIdx - left)).fromThis();
+                leftSel = indexer.getCharPosition(beginIdx).fromThis();
+                rightSel = indexer.getCharPosition(right - (endIdx - left)).fromThis();
             } else {
-                mRight = mIndexer.getCharPosition(right - (endIdx - beginIdx)).fromThis();
+                rightSel = indexer.getCharPosition(right - (endIdx - beginIdx)).fromThis();
             }
         } else {
             if (beginIdx <= left) {
-                mLeft = mIndexer.getCharPosition(beginIdx).fromThis();
-                mRight = mLeft.fromThis();
+                leftSel = indexer.getCharPosition(beginIdx).fromThis();
+                rightSel = leftSel.fromThis();
             } else {
-                mRight = mIndexer.getCharPosition(left + (right - beginIdx)).fromThis();
+                rightSel = indexer.getCharPosition(left + (right - beginIdx)).fromThis();
             }
         }
     }

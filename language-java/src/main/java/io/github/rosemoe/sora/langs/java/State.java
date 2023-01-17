@@ -1,7 +1,7 @@
 /*
  *    sora-editor - the awesome code editor for Android
  *    https://github.com/Rosemoe/sora-editor
- *    Copyright (C) 2020-2022  Rosemoe
+ *    Copyright (C) 2020-2023  Rosemoe
  *
  *     This library is free software; you can redistribute it and/or
  *     modify it under the terms of the GNU Lesser General Public
@@ -23,6 +23,8 @@
  */
 package io.github.rosemoe.sora.langs.java;
 
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Objects;
 
 public class State {
@@ -31,8 +33,22 @@ public class State {
 
     public boolean hasBraces = false;
 
+    public List<String> identifiers = null;
+
+    public void addIdentifier(CharSequence idt) {
+        if (identifiers == null) {
+            identifiers = new ArrayList<>();
+        }
+        if (idt instanceof String) {
+            identifiers.add((String) idt);
+        } else {
+            identifiers.add(idt.toString());
+        }
+    }
+
     @Override
     public boolean equals(Object o) {
+        // `identifiers` is ignored because it is unrelated to tokenization for next line
         if (this == o) return true;
         if (o == null || getClass() != o.getClass()) return false;
         State state1 = (State) o;

@@ -1,7 +1,7 @@
 /*
  *    sora-editor - the awesome code editor for Android
  *    https://github.com/Rosemoe/sora-editor
- *    Copyright (C) 2020-2022  Rosemoe
+ *    Copyright (C) 2020-2023  Rosemoe
  *
  *     This library is free software; you can redistribute it and/or
  *     modify it under the terms of the GNU Lesser General Public
@@ -32,13 +32,15 @@ import io.github.rosemoe.sora.widget.CodeEditor;
 
 /**
  * Report a single click
+ *
+ * @author Rosemoe
  */
 public class ClickEvent extends Event {
 
     private final CharPosition pos;
     private final MotionEvent event;
 
-    public ClickEvent(@NonNull CodeEditor editor, CharPosition position, MotionEvent event) {
+    public ClickEvent(@NonNull CodeEditor editor, @NonNull CharPosition position, @NonNull MotionEvent event) {
         super(editor);
         this.pos = position;
         this.event = event;
@@ -72,6 +74,7 @@ public class ClickEvent extends Event {
     /**
      * Get original event object from Android framework
      */
+    @NonNull
     public MotionEvent getCausingEvent() {
         return event;
     }

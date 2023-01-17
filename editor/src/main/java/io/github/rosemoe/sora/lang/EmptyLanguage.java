@@ -1,7 +1,7 @@
 /*
  *    sora-editor - the awesome code editor for Android
  *    https://github.com/Rosemoe/sora-editor
- *    Copyright (C) 2020-2022  Rosemoe
+ *    Copyright (C) 2020-2023  Rosemoe
  *
  *     This library is free software; you can redistribute it and/or
  *     modify it under the terms of the GNU Lesser General Public
@@ -31,9 +31,12 @@ import androidx.annotation.Nullable;
 import io.github.rosemoe.sora.lang.analysis.AnalyzeManager;
 import io.github.rosemoe.sora.lang.analysis.StyleReceiver;
 import io.github.rosemoe.sora.lang.completion.CompletionPublisher;
+import io.github.rosemoe.sora.lang.format.Formatter;
 import io.github.rosemoe.sora.lang.smartEnter.NewlineHandler;
 import io.github.rosemoe.sora.text.CharPosition;
+import io.github.rosemoe.sora.text.Content;
 import io.github.rosemoe.sora.text.ContentReference;
+import io.github.rosemoe.sora.text.TextRange;
 import io.github.rosemoe.sora.widget.SymbolPairMatch;
 
 /**
@@ -43,14 +46,18 @@ import io.github.rosemoe.sora.widget.SymbolPairMatch;
  */
 public class EmptyLanguage implements Language {
 
+
+    public final static SymbolPairMatch EMPTY_SYMBOL_PAIRS = new SymbolPairMatch();
+
+    @NonNull
     @Override
-    public CharSequence format(CharSequence text) {
-        return text;
+    public Formatter getFormatter() {
+        return EmptyFormatter.INSTANCE;
     }
 
     @Override
     public SymbolPairMatch getSymbolPairs() {
-        return new SymbolPairMatch.DefaultSymbolPairs();
+        return EMPTY_SYMBOL_PAIRS;
     }
 
     @Override
@@ -89,7 +96,35 @@ public class EmptyLanguage implements Language {
         return false;
     }
 
+    public static class EmptyFormatter implements Formatter {
 
+        public final static EmptyFormatter INSTANCE = new EmptyFormatter();
+
+        @Override
+        public void format(@NonNull Content text, @NonNull TextRange cursorRange) {
+
+        }
+
+        @Override
+        public void formatRegion(@NonNull Content text, @NonNull TextRange rangeToFormat, @NonNull TextRange cursorRange) {
+
+        }
+
+        @Override
+        public void setReceiver(@Nullable FormatResultReceiver receiver) {
+
+        }
+
+        @Override
+        public boolean isRunning() {
+            return false;
+        }
+
+        @Override
+        public void destroy() {
+
+        }
+    }
 
     public static class EmptyAnalyzeManager implements AnalyzeManager {
 
@@ -106,12 +141,12 @@ public class EmptyLanguage implements Language {
         }
 
         @Override
-        public void insert(CharPosition start, CharPosition end, CharSequence insertedContent) {
+        public void insert(@NonNull CharPosition start, @NonNull CharPosition end, @NonNull CharSequence insertedContent) {
 
         }
 
         @Override
-        public void delete(CharPosition start, CharPosition end, CharSequence deletedContent) {
+        public void delete(@NonNull CharPosition start, @NonNull CharPosition end, @NonNull CharSequence deletedContent) {
 
         }
 

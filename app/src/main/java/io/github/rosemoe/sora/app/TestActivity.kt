@@ -1,7 +1,7 @@
 /*******************************************************************************
  *    sora-editor - the awesome code editor for Android
  *    https://github.com/Rosemoe/sora-editor
- *    Copyright (C) 2020-2022  Rosemoe
+ *    Copyright (C) 2020-2023  Rosemoe
  *
  *     This library is free software; you can redistribute it and/or
  *     modify it under the terms of the GNU Lesser General Public
@@ -24,11 +24,17 @@
 
 package io.github.rosemoe.sora.app
 
+import android.content.res.Configuration
 import android.graphics.Typeface
 import androidx.appcompat.app.AppCompatActivity
 import android.os.Bundle
+import io.github.rosemoe.sora.lang.diagnostic.DiagnosticDetail
+import io.github.rosemoe.sora.lang.diagnostic.DiagnosticRegion
+import io.github.rosemoe.sora.lang.diagnostic.DiagnosticsContainer
+import io.github.rosemoe.sora.lang.diagnostic.Quickfix
 import io.github.rosemoe.sora.langs.java.JavaLanguage
 import io.github.rosemoe.sora.widget.CodeEditor
+import java.lang.StringBuilder
 
 class TestActivity : AppCompatActivity() {
     private lateinit var editor: CodeEditor
@@ -39,15 +45,33 @@ class TestActivity : AppCompatActivity() {
         setContentView(editor)
         editor.typefaceText = Typeface.createFromAsset(assets, "Roboto-Regular.ttf")
         editor.setEditorLanguage(JavaLanguage())
-        editor.setText("private final PopupWindow mWindow;\n" +
-                "    private final CodeEditor mEditor;\n" +
-                "    private final int mFeatures;\n" +
-                "    private final int[] mLocationBuffer = new int[2];\n" +
-                "    private final EventReceiver<ScrollEvent> mScrollListener;\n" +
-                "    private boolean mShowState;\n" +
+        switchThemeIfRequired(this, editor)
+        val text = StringBuilder("    private final PopupWindow mWindow;\r\n" +
+                "    private final CodeEditor mEditor;\r\n" +
+                "    private final int mFeatures;\n\r" +
+                "    private final int[] mLocationBuffer = new int[2];\r" +
+                "    private final EventReceiver<ScrollEvent> mScrollListener;\r\n" +
+                "    private boolean mShowState;\r" +
                 "    private boolean mRegisterFlag;\n" +
                 "    private boolean mRegistered;\n" +
                 "    private int mOffsetX, mOffsetY, mX, mY, mWidth, mHeight;")
+        for (i in 0..31) {
+            text.append(i.toChar())
+        }
+        text.append(127.toChar())
+        editor.setText(text)
+        editor.diagnostics = DiagnosticsContainer().also {
+            it.addDiagnostic(DiagnosticRegion(37, 50, DiagnosticRegion.SEVERITY_ERROR, 0L, DiagnosticDetail("TestMessage", "This is a test error message\nYou can add your content here\ntest scroll\ntest\ntest\ntest\ntest", listOf(
+                Quickfix("Fix Quick", 0L, {}), Quickfix("Test", 0L, {})
+            ))))
+        }
+        val stringText = text.toString()
+        assert(stringText == editor.text.toString()) { "Text check failed" }
+    }
+
+    override fun onConfigurationChanged(newConfig: Configuration) {
+        super.onConfigurationChanged(newConfig)
+        switchThemeIfRequired(this, editor)
     }
 
     override fun onDestroy() {

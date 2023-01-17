@@ -1,7 +1,7 @@
 /*
  *    sora-editor - the awesome code editor for Android
  *    https://github.com/Rosemoe/sora-editor
- *    Copyright (C) 2020-2022  Rosemoe
+ *    Copyright (C) 2020-2023  Rosemoe
  *
  *     This library is free software; you can redistribute it and/or
  *     modify it under the terms of the GNU Lesser General Public
@@ -23,6 +23,8 @@
  */
 package io.github.rosemoe.sora.widget.layout;
 
+import androidx.annotation.NonNull;
+
 import java.util.NoSuchElementException;
 
 /**
@@ -43,6 +45,7 @@ public interface RowIterator {
      * @return Row object contains the information about a row
      * @throws NoSuchElementException If no more row available
      */
+    @NonNull
     Row next();
 
     /**
@@ -54,7 +57,7 @@ public interface RowIterator {
 
     /**
      * Reset the position to its original position.
-     *
+     * <p>
      * This can be useful when the elements should be iterated for
      * several times.
      */

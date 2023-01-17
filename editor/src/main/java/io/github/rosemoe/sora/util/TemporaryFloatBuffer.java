@@ -1,7 +1,7 @@
 /*
  *    sora-editor - the awesome code editor for Android
  *    https://github.com/Rosemoe/sora-editor
- *    Copyright (C) 2020-2022  Rosemoe
+ *    Copyright (C) 2020-2023  Rosemoe
  *
  *     This library is free software; you can redistribute it and/or
  *     modify it under the terms of the GNU Lesser General Public
@@ -24,6 +24,8 @@
 package io.github.rosemoe.sora.util;
 
 public class TemporaryFloatBuffer {
+
+    private static float[] sTemp = null;
 
     public static float[] obtain(int len) {
         float[] buf;
@@ -48,6 +50,4 @@ public class TemporaryFloatBuffer {
         }
     }
 
-    private static float[] sTemp = null;
-    
 }

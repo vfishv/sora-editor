@@ -1,7 +1,7 @@
 /*
  *    sora-editor - the awesome code editor for Android
  *    https://github.com/Rosemoe/sora-editor
- *    Copyright (C) 2020-2022  Rosemoe
+ *    Copyright (C) 2020-2023  Rosemoe
  *
  *     This library is free software; you can redistribute it and/or
  *     modify it under the terms of the GNU Lesser General Public
@@ -26,84 +26,131 @@ package io.github.rosemoe.sora.widget;
 import android.app.ProgressDialog;
 import android.widget.Toast;
 
+import androidx.annotation.IntRange;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 
 import java.util.regex.Pattern;
 
+import io.github.rosemoe.sora.I18nConfig;
+import io.github.rosemoe.sora.R;
 import io.github.rosemoe.sora.event.ContentChangeEvent;
+import io.github.rosemoe.sora.event.PublishSearchResultEvent;
 import io.github.rosemoe.sora.event.SelectionChangeEvent;
 import io.github.rosemoe.sora.text.Content;
-import io.github.rosemoe.sora.text.Cursor;
 import io.github.rosemoe.sora.text.TextUtils;
 import io.github.rosemoe.sora.util.IntPair;
 import io.github.rosemoe.sora.util.LongArrayList;
 
 /**
- * Search text in editor
+ * Search text in editor.
+ * Note that editor searches text in another thread, so results may not be available immediately. Also,
+ * the searcher does not match empty text. For example, you will never match a single empty
+ * line by regex '^.*$'. What's more, zero-length pattern is not permitted.
+ * The searcher updates its search results automatically when editor text is changed, even after {@link CodeEditor#setText(CharSequence)}
+ * is invoked. So be careful that the search result is changing and {@link PublishSearchResultEvent} is
+ * re-triggered when search result is available for changed text.
  *
+ * @see PublishSearchResultEvent
+ * @see SearchOptions
  * @author Rosemoe
  */
-@SuppressWarnings("deprecated")
 public class EditorSearcher {
 
-    private final CodeEditor mEditor;
-    protected String mPattern;
-    protected SearchOptions mOptions;
-    protected Thread mThread;
-    protected LongArrayList mLastResults;
+    private final CodeEditor editor;
+    protected String currentPattern;
+    protected SearchOptions searchOptions;
+    protected Thread currentThread;
+    /**
+     * Search results. Note that it is naturally sorted by start index (and also end index).
+     * No overlapping region is permitted.
+     */
+    protected LongArrayList lastResults;
+    private boolean cyclicJumping = true;
 
     EditorSearcher(@NonNull CodeEditor editor) {
-        mEditor = editor;
-        mEditor.subscribeEvent(ContentChangeEvent.class, ((event, unsubscribe) -> {
-            if (hasQuery() && mOptions.useRegex) {
-                runRegexMatch();
+        this.editor = editor;
+        this.editor.subscribeEvent(ContentChangeEvent.class, ((event, unsubscribe) -> {
+            if (hasQuery()) {
+                executeMatch();
             }
         }));
     }
 
+    /**
+     * Jump cyclically when calling {@link #gotoNext()} and {@link #gotoPrevious()}
+     * @see #isCyclicJumping()
+     */
+    public void setCyclicJumping(boolean cyclicJumping) {
+        this.cyclicJumping = cyclicJumping;
+    }
+
+    /**
+     * @see #setCyclicJumping(boolean)
+     */
+    public boolean isCyclicJumping() {
+        return cyclicJumping;
+    }
+
+    /**
+     * Search text with the given pattern and options. If you use {@link SearchOptions#TYPE_REGULAR_EXPRESSION},
+     * the pattern will be your regular expression.
+     * <p>
+     * {@link #stopSearch()} should be called if you want to stop, instead of invoking this method with nulls.
+     * <p>
+     * Note that, the result is not immediately available because we search texts in another thread to
+     * avoid lags in main thread. If you want to be notified when the results is available, refer to
+     * {@link PublishSearchResultEvent}. Also be careful that, the event is also triggered when {@link #stopSearch()}
+     * is called.
+     * @throws IllegalArgumentException if pattern length is zero
+     * @throws java.util.regex.PatternSyntaxException if pattern is invalid when regex is enabled.
+     */
     public void search(@NonNull String pattern, @NonNull SearchOptions options) {
         if (pattern.length() == 0) {
             throw new IllegalArgumentException("pattern length must be > 0");
         }
-        if (options.useRegex) {
+        if (options.type == SearchOptions.TYPE_REGULAR_EXPRESSION) {
             // Pre-check
             //noinspection ResultOfMethodCallIgnored
             Pattern.compile(pattern);
         }
-        mPattern = pattern;
-        mOptions = options;
-        if (options.useRegex) {
-            runRegexMatch();
-        } else if(mThread != null && mThread.isAlive()) {
-            mThread.interrupt();
-        }
-        mEditor.postInvalidate();
+        currentPattern = pattern;
+        searchOptions = options;
+        executeMatch();
+        editor.postInvalidate();
     }
 
-    private void runRegexMatch() {
-        if (mThread != null) {
-            mThread.interrupt();
+    /**
+     * Execute current match task. Cancel any previous tasks.
+     */
+    private void executeMatch() {
+        if (currentThread != null && currentThread.isAlive()) {
+            currentThread.interrupt();
         }
-        var options = mOptions;
-        var regex = options.ignoreCase ? Pattern.compile(mPattern, Pattern.CASE_INSENSITIVE) : Pattern.compile(mPattern);
-        var runnable = new SearchRunnable(mEditor.getText(), regex);
-        mThread = new Thread(runnable);
-        mThread.start();
+        var runnable = new SearchRunnable(editor.getText(), searchOptions, currentPattern);
+        currentThread = new Thread(runnable);
+        currentThread.start();
     }
 
+    /**
+     * Stop searching.
+     */
     public void stopSearch() {
-        if (mThread != null && mThread.isAlive()) {
-            mThread.interrupt();
+        if (currentThread != null && currentThread.isAlive()) {
+            currentThread.interrupt();
         }
-        mThread = null;
-        mLastResults = null;
-        mPattern = null;
-        mOptions = null;
+        currentThread = null;
+        lastResults = null;
+        currentPattern = null;
+        searchOptions = null;
+        editor.dispatchEvent(new PublishSearchResultEvent(editor));
     }
 
+    /**
+     * Check if any search is in progress
+     */
     public boolean hasQuery() {
-        return mPattern != null;
+        return currentPattern != null;
     }
 
     private void checkState() {
@@ -112,159 +159,192 @@ public class EditorSearcher {
         }
     }
 
-    public boolean gotoNext() {
+    /**
+     * Find current selected region in search results and return the index in search result.
+     * Or {@code -1} if result is not available or the current selected region is not in result.
+     * @throws IllegalStateException if no search is in progress
+     */
+    public int getCurrentMatchedPositionIndex() {
         checkState();
-        if (mOptions.useRegex) {
-            if (isResultValid()) {
-                var res = mLastResults;
-                var right = mEditor.getCursor().getRight();
-                for (int i = 0;i < res.size();i++) {
-                    var data = res.get(i);
-                    var start = IntPair.getFirst(data);
-                    if (start >= right) {
-                        var pos1 = mEditor.getText().getIndexer().getCharPosition(start);
-                        var pos2 = mEditor.getText().getIndexer().getCharPosition(IntPair.getSecond(data));
-                        mEditor.setSelectionRegion(pos1.line, pos1.column, pos2.line, pos2.column, SelectionChangeEvent.CAUSE_SEARCH);
-                        return true;
-                    }
-                }
-            }
-        } else {
-            Content text = mEditor.getText();
-            Cursor cursor = text.getCursor();
-            int line = cursor.getRightLine();
-            int column = cursor.getRightColumn();
-            for (int i = line; i < text.getLineCount(); i++) {
-                int idx = column >= text.getColumnCount(i) ? -1 : TextUtils.indexOf(text.getLine(i), mPattern, mOptions.ignoreCase, column);
-                if (idx != -1) {
-                    mEditor.setSelectionRegion(i, idx, i, idx + mPattern.length(), SelectionChangeEvent.CAUSE_SEARCH);
-                    return true;
-                }
-                column = 0;
-            }
-        }
-        return false;
-    }
-
-    public boolean gotoPrevious() {
-        checkState();
-        if (mOptions.useRegex) {
-            if (isResultValid()) {
-                var res = mLastResults;
-                var left = mEditor.getCursor().getLeft();
-                for (int i = 0;i < res.size();i++) {
-                    var data = res.get(i);
-                    var end = IntPair.getSecond(data);
-                    if (end <= left) {
-                        var pos1 = mEditor.getText().getIndexer().getCharPosition(IntPair.getFirst(data));
-                        var pos2 = mEditor.getText().getIndexer().getCharPosition(end);
-                        mEditor.setSelectionRegion(pos1.line, pos1.column, pos2.line, pos2.column, SelectionChangeEvent.CAUSE_SEARCH);
-                        return true;
-                    }
-                }
-            }
-        } else {
-            Content text = mEditor.getText();
-            Cursor cursor = text.getCursor();
-            int line = cursor.getLeftLine();
-            int column = cursor.getLeftColumn();
-            for (int i = line; i >= 0; i--) {
-                int idx = column - 1 < 0 ? -1 : TextUtils.lastIndexOf(text.getLine(i), mPattern, mOptions.ignoreCase, column - 1);
-                if (idx != -1) {
-                    mEditor.setSelectionRegion(i, idx, i, idx + mPattern.length(), SelectionChangeEvent.CAUSE_SEARCH);
-                    return true;
-                }
-                column = i - 1 >= 0 ? text.getColumnCount(i - 1) : 0;
-            }
-        }
-        return false;
-    }
-
-    public boolean isMatchedPositionSelected() {
-        checkState();
-        var cur = mEditor.getCursor();
+        var cur = editor.getCursor();
         if (!cur.isSelected()) {
-            return false;
+            return -1;
         }
         var left = cur.getLeft();
         var right = cur.getRight();
-        if (mOptions.useRegex) {
-            if (isResultValid()) {
-                var res = mLastResults;
-                var packed = IntPair.pack(left, right);
-                for (int i = 0;i < res.size();i++) {
-                    var value = res.get(i);
-                    if (value == packed) {
-                        return true;
-                    } else if (value > packed) {
-                        // Values behind can not be valid
-                        break;
-                    }
-                }
+
+        if (isResultValid()) {
+            var res = lastResults;
+            if (res == null) {
+                return -1;
             }
-        } else {
-            var selected = mEditor.getText().subSequence(left, right).toString();
-            return mOptions.ignoreCase ? selected.equalsIgnoreCase(mPattern) : selected.equals(mPattern);
+            var packed = IntPair.pack(left, right);
+            int index = res.lowerBound(packed);
+            if (index < res.size() && res.get(index) == packed) {
+                return index;
+            }
+        }
+        return -1;
+    }
+
+    /**
+     * Get item count of search result. Or {@code 0} if result is not available or no item is found.
+     * @throws IllegalStateException if no search is in progress
+     */
+    public int getMatchedPositionCount() {
+        checkState();
+        if (!isResultValid()) {
+            return 0;
+        }
+        var result = lastResults;
+        return result == null ? 0 : result.size();
+    }
+
+    /**
+     * Goto next matched position based on cursor position.
+     * @see #setCyclicJumping(boolean)
+     * @return if any jumping action is performed
+     * @throws IllegalStateException if no search is in progress
+     */
+    public boolean gotoNext() {
+        checkState();
+        if (isResultValid()) {
+            var res = lastResults;
+            if (res == null) {
+                return false;
+            }
+            var right = editor.getCursor().getRight();
+            var index = res.lowerBoundByFirst(right);
+            if (index == res.size() && cyclicJumping) {
+                index = 0;
+            }
+            if (index < res.size()) {
+                var data = res.get(index);
+                var start = IntPair.getFirst(data);
+                var pos1 = editor.getText().getIndexer().getCharPosition(start);
+                var pos2 = editor.getText().getIndexer().getCharPosition(IntPair.getSecond(data));
+                editor.setSelectionRegion(pos1.line, pos1.column, pos2.line, pos2.column, SelectionChangeEvent.CAUSE_SEARCH);
+                return true;
+            }
         }
         return false;
     }
 
+    /**
+     * Goto last matched position based on cursor position.
+     * @see #setCyclicJumping(boolean)
+     * @return if any jumping action is performed
+     * @throws IllegalStateException if no search is in progress
+     */
+    public boolean gotoPrevious() {
+        checkState();
+        if (isResultValid()) {
+            var res = lastResults;
+            if (res == null || res.size() == 0) {
+                return false;
+            }
+            var left = editor.getCursor().getLeft();
+            var index = res.lowerBoundByFirst(left);
+            if (index == res.size() || IntPair.getFirst(res.get(index)) >= index) {
+                index --;
+            }
+            if (index < 0 && cyclicJumping) {
+                index = res.size() - 1;
+            }
+            if (index >= 0 && index < res.size()) {
+                var data = res.get(index);
+                var end = IntPair.getSecond(data);
+                var pos1 = editor.getText().getIndexer().getCharPosition(IntPair.getFirst(data));
+                var pos2 = editor.getText().getIndexer().getCharPosition(end);
+                editor.setSelectionRegion(pos1.line, pos1.column, pos2.line, pos2.column, SelectionChangeEvent.CAUSE_SEARCH);
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /**
+     * Check if selected region is in search result
+     * @throws IllegalStateException if no search is in progress
+     */
+    public boolean isMatchedPositionSelected() {
+        return getCurrentMatchedPositionIndex() > -1;
+    }
+
+    /**
+     * Replace currently selected region if it is in search result. Otherwise, attempt to jump to
+     * next matched position.
+     * @param replacement The text for replacement
+     * @throws IllegalStateException if no search is in progress
+     */
     public void replaceThis(@NonNull String replacement) {
+        if (!editor.isEditable()) {
+            return;
+        }
         if (isMatchedPositionSelected()) {
-            mEditor.commitText(replacement);
+            editor.commitText(replacement);
         } else {
             gotoNext();
         }
     }
 
-    public void replaceAll (@NonNull String replacement) {
-        replaceAll (replacement, null);
+    /**
+     * Replace all matched position. Note that after invoking this, a blocking {@link ProgressDialog}
+     * is shown until the action is done (either succeeded or failed).
+     * @param replacement The text for replacement
+     * @throws IllegalStateException if no search is in progress
+     */
+    public void replaceAll(@NonNull String replacement) {
+        replaceAll(replacement, null);
     }
 
-    public void replaceAll(@NonNull String replacement, @Nullable final Runnable whenFinished) {
-        checkState();
-        if (!isResultValid()) {
-            Toast.makeText(mEditor.getContext(), "Editor is still preparing", Toast.LENGTH_SHORT).show();
+    /**
+     * Replace all matched position. Note that after invoking this, a blocking {@link ProgressDialog}
+     * is shown until the action is done (either succeeded or failed). The given callback will be executed
+     * on success.
+     *
+     * @param replacement The text for replacement
+     * @param whenSucceeded Callback when action is succeeded
+     * @throws IllegalStateException if no search is in progress
+     */
+    public void replaceAll(@NonNull String replacement, @Nullable final Runnable whenSucceeded) {
+        if (!editor.isEditable()) {
             return;
         }
-        final var dialog = ProgressDialog.show(mEditor.getContext(), "Replace All", "Replacing...", true, false);
-        final var res = mLastResults;
+        checkState();
+        if (!isResultValid()) {
+            Toast.makeText(editor.getContext(), I18nConfig.getResourceId(R.string.editor_search_busy), Toast.LENGTH_SHORT).show();
+            return;
+        }
+        var context = editor.getContext();
+        final var dialog = ProgressDialog.show(context, I18nConfig.getString(context, R.string.replaceAll), I18nConfig.getString(context, R.string.editor_search_replacing), true, false);
+        final var res = lastResults;
         new Thread(() -> {
             try {
-                var sb = mEditor.getText().toStringBuilder();
+                var sb = editor.getText().toStringBuilder();
                 int newLength = replacement.length();
-                if (mOptions.useRegex) {
-                    int delta = 0;
-                    for (int i = 0; i < res.size(); i++) {
-                        var region = res.get(i);
-                        var start = IntPair.getFirst(region);
-                        var end = IntPair.getSecond(region);
-                        var oldLength = end - start;
-                        sb.replace(start + delta, end + delta, replacement);
-                        delta += newLength - oldLength;
-                    }
-                } else {
-                    int fromIndex = 0;
-                    int foundIndex;
-                    while ((foundIndex = TextUtils.indexOf(sb, mPattern, mOptions.ignoreCase, fromIndex)) != -1) {
-                        sb.replace(foundIndex, foundIndex + mPattern.length(), replacement);
-                        fromIndex = foundIndex + newLength;
-                    }
+                int delta = 0;
+                for (int i = 0; i < res.size(); i++) {
+                    var region = res.get(i);
+                    var start = IntPair.getFirst(region);
+                    var end = IntPair.getSecond(region);
+                    var oldLength = end - start;
+                    sb.replace(start + delta, end + delta, replacement);
+                    delta += newLength - oldLength;
                 }
-                mEditor.post(() -> {
-                    var pos = mEditor.getCursor().left();
-                    //stopSearch();
-                    mEditor.getText().replace(0, 0, mEditor.getLineCount() - 1, mEditor.getText().getColumnCount(mEditor.getLineCount() - 1), sb);
-                    mEditor.setSelectionAround(pos.line, pos.column);
+                editor.postInLifecycle(() -> {
+                    var pos = editor.getCursor().left();
+                    editor.getText().replace(0, 0, editor.getLineCount() - 1, editor.getText().getColumnCount(editor.getLineCount() - 1), sb);
+                    editor.setSelectionAround(pos.line, pos.column);
                     dialog.dismiss();
-    
-                    if (whenFinished != null) {
-                        whenFinished.run ();
+
+                    if (whenSucceeded != null) {
+                        whenSucceeded.run();
                     }
                 });
             } catch (Exception e) {
-                mEditor.post(() -> {
-                    Toast.makeText(mEditor.getContext(), "Replace failed:" + e, Toast.LENGTH_SHORT).show();
+                editor.postInLifecycle(() -> {
+                    Toast.makeText(editor.getContext(), "Replace failed:" + e, Toast.LENGTH_SHORT).show();
                     dialog.dismiss();
                 });
             }
@@ -272,17 +352,48 @@ public class EditorSearcher {
     }
 
     protected boolean isResultValid() {
-        return mThread == null || !mThread.isAlive();
+        return currentThread == null || !currentThread.isAlive();
     }
 
+    /**
+     * Search options for {@link EditorSearcher#search(String, SearchOptions)}
+     */
     public static class SearchOptions {
 
         public final boolean ignoreCase;
-        public final boolean useRegex;
+        @IntRange(from = 1, to = 3)
+        public final int type;
+        /**
+         * Normal text searching
+         */
+        public final static int TYPE_NORMAL = 1;
+        /**
+         * Text searching by whole word
+         */
+        public final static int TYPE_WHOLE_WORD = 2;
+        /**
+         * Use regular expression for text searching
+         */
+        public final static int TYPE_REGULAR_EXPRESSION = 3;
 
         public SearchOptions(boolean ignoreCase, boolean useRegex) {
+            this(useRegex ? TYPE_REGULAR_EXPRESSION : TYPE_NORMAL, ignoreCase);
+        }
+
+        /**
+         * Create a new searching option with the given attributes.
+         * @param type type of searching method
+         * @param ignoreCase Case insensitive
+         * @see #TYPE_NORMAL
+         * @see #TYPE_WHOLE_WORD
+         * @see #TYPE_REGULAR_EXPRESSION
+         */
+        public SearchOptions(@IntRange(from = 1, to = 3) int type, boolean ignoreCase) {
+            if (type < 1 || type > 3) {
+                throw new IllegalArgumentException("invalid type");
+            }
+            this.type = type;
             this.ignoreCase = ignoreCase;
-            this.useRegex = useRegex;
         }
 
     }
@@ -292,33 +403,70 @@ public class EditorSearcher {
      */
     private final class SearchRunnable implements Runnable {
 
-        private final StringBuilder mText;
-        private final Pattern mPattern;
-        private Thread mLocalThread;
+        private final StringBuilder text;
+        private final String pattern;
+        private final SearchOptions options;
+        private Thread localThread;
 
-        public SearchRunnable(@NonNull Content content, @NonNull Pattern pattern) {
-            this.mText = content.toStringBuilder();
-            this.mPattern = pattern;
+        public SearchRunnable(@NonNull Content content, @NonNull SearchOptions options, @NonNull String pattern) {
+            this.text = content.toStringBuilder();
+            this.options = options;
+            this.pattern = pattern;
         }
 
         private boolean checkNotCancelled() {
-            return mThread == mLocalThread && !Thread.interrupted();
+            return currentThread == localThread && !Thread.interrupted();
         }
 
         @Override
         public void run() {
-            mLocalThread = Thread.currentThread();
+            localThread = Thread.currentThread();
             var results = new LongArrayList();
-            var matcher = mPattern.matcher(mText);
-            var start = 0;
-            while (start < mText.length() && matcher.find(start) && checkNotCancelled()) {
-                // Search next one from end
-                start = matcher.end();
-                results.add(IntPair.pack(matcher.start(), start));
+            var textLength = text.length();
+            var ignoreCase = searchOptions.ignoreCase;
+            var pattern = this.pattern;
+            switch (options.type) {
+                case SearchOptions.TYPE_NORMAL: {
+                    int nextStart = 0;
+                    var patternLength = pattern.length();
+                    while (nextStart != -1 && nextStart < textLength && checkNotCancelled()) {
+                        nextStart = TextUtils.indexOf(text, pattern, ignoreCase, nextStart);
+                        if (nextStart != -1) {
+                            results.add(IntPair.pack(nextStart, nextStart + patternLength));
+                            nextStart += patternLength;
+                        }
+                    }
+                    break;
+                }
+                case SearchOptions.TYPE_WHOLE_WORD:
+                    pattern = "\\b" + Pattern.quote(pattern) + "\\b";
+                    // fall-through
+                case SearchOptions.TYPE_REGULAR_EXPRESSION:
+                    var regex = Pattern.compile(pattern, (ignoreCase ? Pattern.CASE_INSENSITIVE : 0) | Pattern.MULTILINE);
+                    int lastEnd = 0;
+                    // Matcher will call toString() on input several times
+                    var string = text.toString();
+                    var matcher = regex.matcher(string);
+                    while (lastEnd < textLength && matcher.find(lastEnd) && checkNotCancelled()) {
+                        lastEnd = matcher.end();
+                        var start = matcher.start();
+                        if (start == lastEnd) {
+                            // Do not match empty text
+                            lastEnd ++;
+                            continue;
+                        }
+                        results.add(IntPair.pack(matcher.start(), lastEnd));
+                    }
             }
             if (checkNotCancelled()) {
-                mLastResults = results;
-                mEditor.postInvalidate();
+                editor.postInLifecycle(() -> {
+                    if (currentThread == localThread) {
+                        lastResults = results;
+                        editor.invalidate();
+                        editor.dispatchEvent(new PublishSearchResultEvent(editor));
+                        currentThread = null;
+                    }
+                });
             }
         }
     }

@@ -1,7 +1,7 @@
 /*
  *    sora-editor - the awesome code editor for Android
  *    https://github.com/Rosemoe/sora-editor
- *    Copyright (C) 2020-2022  Rosemoe
+ *    Copyright (C) 2020-2023  Rosemoe
  *
  *     This library is free software; you can redistribute it and/or
  *     modify it under the terms of the GNU Lesser General Public
@@ -30,6 +30,10 @@ package io.github.rosemoe.sora.widget.schemes;
  */
 public class SchemeVS2019 extends EditorColorScheme {
 
+    public SchemeVS2019() {
+        super(true);
+    }
+
     @Override
     public void applyDefault() {
         super.applyDefault();
@@ -42,9 +46,12 @@ public class SchemeVS2019 extends EditorColorScheme {
         setColor(COMMENT, 0xff57a64a);
         setColor(KEYWORD, 0xff569cd6);
         setColor(WHOLE_BACKGROUND, 0xff1e1e1e);
+        setColor(COMPLETION_WND_BACKGROUND, 0xff1e1e1e);
+        setColor(COMPLETION_WND_CORNER, 0xff999999);
         setColor(TEXT_NORMAL, 0xffdcdcdc);
         setColor(LINE_NUMBER_BACKGROUND, 0xff1e1e1e);
         setColor(LINE_NUMBER, 0xff2b9eaf);
+        setColor(LINE_NUMBER_CURRENT, 0xff2b9eaf);
         setColor(LINE_DIVIDER, 0xff2b9eaf);
         setColor(SCROLL_BAR_THUMB, 0xff3e3e42);
         setColor(SCROLL_BAR_THUMB_PRESSED, 0xff9e9e9e);
@@ -57,6 +64,7 @@ public class SchemeVS2019 extends EditorColorScheme {
         setColor(BLOCK_LINE_CURRENT, 0);
         setColor(NON_PRINTABLE_CHAR, 0xffdddddd);
         setColor(TEXT_SELECTED, 0xffffffff);
+        setColor(HIGHLIGHTED_DELIMITERS_FOREGROUND, 0xffffffff);
     }
 
 }

@@ -1,7 +1,7 @@
 /*
  *    sora-editor - the awesome code editor for Android
  *    https://github.com/Rosemoe/sora-editor
- *    Copyright (C) 2020-2022  Rosemoe
+ *    Copyright (C) 2020-2023  Rosemoe
  *
  *     This library is free software; you can redistribute it and/or
  *     modify it under the terms of the GNU Lesser General Public
@@ -88,7 +88,7 @@ public class JavaTextTokenizer {
         return MyCharacter.isJavaIdentifierStart(ch);
     }
 
-    public CharSequence getTokenString() {
+    public CharSequence getTokenText() {
         return source.subSequence(offset, offset + length);
     }
 
@@ -121,6 +121,10 @@ public class JavaTextTokenizer {
     }
 
     public Tokens nextToken() {
+        return currToken = nextTokenInternal();
+    }
+
+    private Tokens nextTokenInternal() {
         if (lcCal) {
             boolean r = false;
             for (int i = offset; i < offset + length; i++) {
@@ -287,10 +291,9 @@ public class JavaTextTokenizer {
                     return;
                 }
                 length++;
-                throwIfNeeded();
             }
         }
-        if (offset + length != bufferLen) {
+        if (offset + length < bufferLen) {
             length++;
         }
     }

@@ -1,7 +1,7 @@
 /*
  *    sora-editor - the awesome code editor for Android
  *    https://github.com/Rosemoe/sora-editor
- *    Copyright (C) 2020-2022  Rosemoe
+ *    Copyright (C) 2020-2023  Rosemoe
  *
  *     This library is free software; you can redistribute it and/or
  *     modify it under the terms of the GNU Lesser General Public
@@ -24,11 +24,13 @@
 package io.github.rosemoe.sora.event;
 
 import androidx.annotation.NonNull;
+import androidx.annotation.Nullable;
 
 import io.github.rosemoe.sora.widget.CodeEditor;
 
 /**
  * Event with a result
+ *
  * @param <T> Result type
  */
 public abstract class ResultedEvent<T> extends Event {
@@ -39,12 +41,13 @@ public abstract class ResultedEvent<T> extends Event {
         super(editor);
     }
 
-    public void setResult(T result) {
-        this.result = result;
-    }
-
+    @Nullable
     public T getResult() {
         return result;
+    }
+
+    public void setResult(@Nullable T result) {
+        this.result = result;
     }
 
     public boolean isResultSet() {

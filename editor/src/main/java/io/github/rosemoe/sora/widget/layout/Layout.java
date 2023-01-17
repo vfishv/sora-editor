@@ -1,7 +1,7 @@
 /*
  *    sora-editor - the awesome code editor for Android
  *    https://github.com/Rosemoe/sora-editor
- *    Copyright (C) 2020-2022  Rosemoe
+ *    Copyright (C) 2020-2023  Rosemoe
  *
  *     This library is free software; you can redistribute it and/or
  *     modify it under the terms of the GNU Lesser General Public
@@ -23,6 +23,12 @@
  */
 package io.github.rosemoe.sora.widget.layout;
 
+import android.util.SparseArray;
+
+import androidx.annotation.NonNull;
+import androidx.annotation.Nullable;
+
+import io.github.rosemoe.sora.text.ContentLine;
 import io.github.rosemoe.sora.text.ContentListener;
 import io.github.rosemoe.sora.text.LineRemoveListener;
 
@@ -55,7 +61,26 @@ public interface Layout extends LineRemoveListener, ContentListener {
      * @param initialRow The first row in result iterator
      * @return Iterator contains rows
      */
-    RowIterator obtainRowIterator(int initialRow);
+    @NonNull
+    default RowIterator obtainRowIterator(int initialRow) {
+        return obtainRowIterator(initialRow, null);
+    }
+
+    /**
+     * Return a {@link RowIterator} object for editor to draw text rows
+     *
+     * @param initialRow The first row in result iterator
+     * @param preloadedLines Lines that are already loaded in editor
+     * @return Iterator contains rows
+     */
+    @NonNull
+    RowIterator obtainRowIterator(int initialRow, @Nullable SparseArray<ContentLine> preloadedLines);
+
+    /**
+     * Get the specific Row
+     */
+    @NonNull
+    Row getRowAt(int rowIndex);
 
     /**
      * Get the width of this layout
@@ -74,6 +99,11 @@ public interface Layout extends LineRemoveListener, ContentListener {
     int getLayoutHeight();
 
     /**
+     * Get the total row count
+     */
+    int getRowCount();
+
+    /**
      * Get character line and column for offsets in layout
      *
      * @param xOffset Horizontal offset on layout
@@ -90,6 +120,7 @@ public interface Layout extends LineRemoveListener, ContentListener {
      * @param column Column on line
      * @return An array containing layout offset, first element is the bottom of character and second element is the left of character
      */
+    @NonNull
     default float[] getCharLayoutOffset(int line, int column) {
         return getCharLayoutOffset(line, column, new float[2]);
     }
@@ -99,9 +130,10 @@ public interface Layout extends LineRemoveListener, ContentListener {
      *
      * @param line   The line index
      * @param column Column on line
-     * @param array If the array is given, it will try to save the two elements in this array. Otherwise, a new array is created
+     * @param array  If the array is given, it will try to save the two elements in this array. Otherwise, a new array is created
      * @return An array containing layout offset, first element is the bottom of character and second element is the left of character
      */
+    @NonNull
     float[] getCharLayoutOffset(int line, int column, float[] array);
 
     /**
@@ -111,14 +143,21 @@ public interface Layout extends LineRemoveListener, ContentListener {
 
     /**
      * Get position after moving up once
+     *
      * @return A packed pair (line, column) describing the result position
      */
     long getUpPosition(int line, int column);
 
     /**
      * Get position after moving down once
+     *
      * @return A packed pair (line, column) describing the result position
      */
     long getDownPosition(int line, int column);
+
+    /**
+     * Get row index for text index
+     */
+    int getRowIndexForPosition(int index);
 
 }

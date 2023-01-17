@@ -1,7 +1,7 @@
 /*
  *    sora-editor - the awesome code editor for Android
  *    https://github.com/Rosemoe/sora-editor
- *    Copyright (C) 2020-2022  Rosemoe
+ *    Copyright (C) 2020-2023  Rosemoe
  *
  *     This library is free software; you can redistribute it and/or
  *     modify it under the terms of the GNU Lesser General Public
@@ -23,12 +23,14 @@
  */
 package io.github.rosemoe.sora.event;
 
+import androidx.annotation.NonNull;
+
 import io.github.rosemoe.sora.widget.CodeEditor;
 
 /**
  * Reports a scroll in editor.
  * The scrolling action can either have run or be running when this event is generated and sent.
- *
+ * <p>
  * The returned x,y positions are usually positive when over-scrolling is disabled. They represent
  * the left-top position's pixel in editor.
  */
@@ -61,7 +63,7 @@ public class ScrollEvent extends Event {
     private final int mEndY;
     private final int mCause;
 
-    public ScrollEvent(CodeEditor editor, int startX, int startY, int endX, int endY, int cause) {
+    public ScrollEvent(@NonNull CodeEditor editor, int startX, int startY, int endX, int endY, int cause) {
         super(editor);
         mStartX = startX;
         mStartY = startY;

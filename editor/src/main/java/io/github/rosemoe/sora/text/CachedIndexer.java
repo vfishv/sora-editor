@@ -1,7 +1,7 @@
 /*
  *    sora-editor - the awesome code editor for Android
  *    https://github.com/Rosemoe/sora-editor
- *    Copyright (C) 2020-2022  Rosemoe
+ *    Copyright (C) 2020-2023  Rosemoe
  *
  *     This library is free software; you can redistribute it and/or
  *     modify it under the terms of the GNU Lesser General Public
@@ -29,6 +29,8 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 
+import io.github.rosemoe.sora.annotations.UnsupportedUserUsage;
+
 /**
  * Indexer Impl for Content
  * With cache
@@ -37,24 +39,22 @@ import java.util.List;
  */
 public class CachedIndexer implements Indexer, ContentListener {
 
-    private final Content mContent;
-    private final CharPosition mZeroPoint = new CharPosition().zero();
-    private final CharPosition mEndPoint = new CharPosition();
-    private final List<CharPosition> mCachePositions = new ArrayList<>();
-    private final int mSwitchLine = 50;
-    private int mSwitchIndex = 50;
-    private int mMaxCacheSize = 50;
-    private boolean mHandleEvent = true;
-    private boolean mHasException = false;
+    private final Content content;
+    private final CharPosition startPosition = new CharPosition().toBOF();
+    private final CharPosition endPosition = new CharPosition();
+    private final List<CharPosition> cachedPositions = new ArrayList<>();
+    private final int thresholdLine = 50;
+    private int thresholdIndex = 50;
+    private int maxCacheCount = 50;
 
     /**
      * Create a new CachedIndexer for the given content
      *
      * @param content Content to manage
      */
-    CachedIndexer(Content content) {
-        mContent = content;
-        detectException();
+    CachedIndexer(@NonNull Content content) {
+        this.content = content;
+        updateEnd();
     }
 
     /**
@@ -63,89 +63,79 @@ public class CachedIndexer implements Indexer, ContentListener {
      *
      * @param s Switch
      */
-    public void setSwitchIndex(int s) {
-        mSwitchIndex = s;
+    public void setThresholdIndex(int s) {
+        thresholdIndex = s;
     }
 
     /**
-     * Find out whether things unexpected happened
+     * Update the end position
      */
-    private void detectException() {
-        if (!isHandleEvent() && !mCachePositions.isEmpty()) {
-            mHasException = true;
-        }
-        mEndPoint.index = mContent.length();
-        mEndPoint.line = mContent.getLineCount() - 1;
-        mEndPoint.column = mContent.getColumnCount(mEndPoint.line);
+    private void updateEnd() {
+        endPosition.index = content.length();
+        endPosition.line = content.getLineCount() - 1;
+        endPosition.column = content.getColumnCount(endPosition.line);
     }
 
     /**
-     * Throw a new exception for illegal state
-     */
-    protected void throwIfHas() {
-        if (mHasException) {
-            throw new IllegalStateException("there is cache but the content changed");
-        }
-    }
-
-    /**
-     * Get nearest cache for the given index
+     * Get the nearest cache for the given index
      *
      * @param index Querying index
      * @return Nearest cache
      */
-    private CharPosition findNearestByIndex(int index) {
+    @NonNull
+    private synchronized CharPosition findNearestByIndex(int index) {
         int min = index, dis = index;
-        CharPosition nearestCharPosition = mZeroPoint;
+        CharPosition nearestCharPosition = startPosition;
         int targetIndex = 0;
-        for (int i = 0;i < mCachePositions.size();i++) {
-            CharPosition pos = mCachePositions.get(i);
+        for (int i = 0; i < cachedPositions.size(); i++) {
+            CharPosition pos = cachedPositions.get(i);
             dis = Math.abs(pos.index - index);
             if (dis < min) {
                 min = dis;
                 nearestCharPosition = pos;
                 targetIndex = i;
             }
-            if (dis <= mSwitchIndex) {
+            if (dis <= thresholdIndex) {
                 break;
             }
         }
-        if (Math.abs(mEndPoint.index - index) < dis) {
-            nearestCharPosition = mEndPoint;
+        if (Math.abs(endPosition.index - index) < dis) {
+            nearestCharPosition = endPosition;
         }
-        if (nearestCharPosition != mZeroPoint && nearestCharPosition != mEndPoint) {
-            Collections.swap(mCachePositions, targetIndex, 0);
+        if (nearestCharPosition != startPosition && nearestCharPosition != endPosition) {
+            Collections.swap(cachedPositions, targetIndex, 0);
         }
         return nearestCharPosition;
     }
 
     /**
-     * Get nearest cache for the given line
+     * Get the nearest cache for the given line
      *
      * @param line Querying line
      * @return Nearest cache
      */
-    private CharPosition findNearestByLine(int line) {
+    @NonNull
+    private synchronized CharPosition findNearestByLine(int line) {
         int min = line, dis = line;
-        CharPosition nearestCharPosition = mZeroPoint;
+        CharPosition nearestCharPosition = startPosition;
         int targetIndex = 0;
-        for (int i = 0;i < mCachePositions.size();i++) {
-            CharPosition pos = mCachePositions.get(i);
+        for (int i = 0; i < cachedPositions.size(); i++) {
+            CharPosition pos = cachedPositions.get(i);
             dis = Math.abs(pos.line - line);
             if (dis < min) {
                 min = dis;
                 nearestCharPosition = pos;
                 targetIndex = i;
             }
-            if (min <= mSwitchLine) {
+            if (min <= thresholdLine) {
                 break;
             }
         }
-        if (Math.abs(mEndPoint.line - line) < dis) {
-            nearestCharPosition = mEndPoint;
+        if (Math.abs(endPosition.line - line) < dis) {
+            nearestCharPosition = endPosition;
         }
-        if (nearestCharPosition != mZeroPoint && nearestCharPosition != mEndPoint) {
-            Collections.swap(mCachePositions, 0, targetIndex);
+        if (nearestCharPosition != startPosition && nearestCharPosition != endPosition) {
+            Collections.swap(cachedPositions, 0, targetIndex);
         }
         return nearestCharPosition;
     }
@@ -165,13 +155,15 @@ public class CachedIndexer implements Indexer, ContentListener {
         int workIndex = start.index;
         //Move the column to the line end
         {
-            int column = mContent.getColumnCount(workLine);
+            var addition = Math.max(content.getLineSeparatorUnsafe(workLine).getLength() - 1, 0);
+            int column = content.getColumnCountUnsafe(workLine) + addition;
             workIndex += column - workColumn;
             workColumn = column;
         }
         while (workIndex < index) {
             workLine++;
-            workColumn = mContent.getColumnCount(workLine);
+            var addition = Math.max(content.getLineSeparatorUnsafe(workLine).getLength() - 1, 0);
+            workColumn = content.getColumnCountUnsafe(workLine) + addition;
             workIndex += workColumn + 1;
         }
         if (workIndex > index) {
@@ -188,7 +180,7 @@ public class CachedIndexer implements Indexer, ContentListener {
      * @param start Given position
      * @param index Querying index
      */
-    private void findIndexBackward(CharPosition start, int index, CharPosition dest) {
+    private void findIndexBackward(@NonNull CharPosition start, int index, @NonNull CharPosition dest) {
         if (start.index < index) {
             throw new IllegalArgumentException("Unable to find forward from method findIndexBackward()");
         }
@@ -199,10 +191,11 @@ public class CachedIndexer implements Indexer, ContentListener {
             workIndex -= workColumn + 1;
             workLine--;
             if (workLine != -1) {
-                workColumn = mContent.getColumnCount(workLine);
+                var addition = Math.max(content.getLineSeparatorUnsafe(workLine).getLength() - 1, 0);
+                workColumn = content.getColumnCountUnsafe(workLine) + addition;
             } else {
-                //Reached the start of text,we have to use findIndexForward() as this method can not handle it
-                findIndexForward(mZeroPoint, index, dest);
+                // Reached the start of text,we have to use findIndexForward() as this method can not handle it
+                findIndexForward(startPosition, index, dest);
                 return;
             }
         }
@@ -223,7 +216,7 @@ public class CachedIndexer implements Indexer, ContentListener {
      * @param line   Querying line
      * @param column Querying column
      */
-    private void findLiCoForward(CharPosition start, int line, int column, CharPosition dest) {
+    private void findLiCoForward(@NonNull CharPosition start, int line, int column, @NonNull CharPosition dest) {
         if (start.line > line) {
             throw new IllegalArgumentException("can not find backward from findLiCoForward()");
         }
@@ -234,7 +227,7 @@ public class CachedIndexer implements Indexer, ContentListener {
             workIndex = workIndex - start.column;
         }
         while (workLine < line) {
-            workIndex += mContent.getColumnCount(workLine) + 1;
+            workIndex += content.getColumnCountUnsafe(workLine) + content.getLineSeparatorUnsafe(workLine).getLength();
             workLine++;
         }
         dest.column = 0;
@@ -250,7 +243,7 @@ public class CachedIndexer implements Indexer, ContentListener {
      * @param line   Querying line
      * @param column Querying column
      */
-    private void findLiCoBackward(CharPosition start, int line, int column, CharPosition dest) {
+    private void findLiCoBackward(@NonNull CharPosition start, int line, int column, @NonNull CharPosition dest) {
         if (start.line < line) {
             throw new IllegalArgumentException("can not find forward from findLiCoBackward()");
         }
@@ -261,7 +254,7 @@ public class CachedIndexer implements Indexer, ContentListener {
             workIndex = workIndex - start.column;
         }
         while (workLine > line) {
-            workIndex -= mContent.getColumnCount(workLine - 1) + 1;
+            workIndex -= content.getColumnCountUnsafe(workLine - 1) + content.getLineSeparatorUnsafe(workLine - 1).getLength();
             workLine--;
         }
         dest.column = 0;
@@ -277,12 +270,11 @@ public class CachedIndexer implements Indexer, ContentListener {
      * @param line   Querying line
      * @param column Querying column
      */
-    private void findInLine(CharPosition pos, int line, int column) {
+    private void findInLine(@NonNull CharPosition pos, int line, int column) {
         if (pos.line != line) {
             throw new IllegalArgumentException("can not find other lines with findInLine()");
         }
         pos.index = pos.index - pos.column + column;
-        pos.line = line;
         pos.column = column;
     }
 
@@ -291,13 +283,13 @@ public class CachedIndexer implements Indexer, ContentListener {
      *
      * @param pos New cache
      */
-    private void push(CharPosition pos) {
-        if (mMaxCacheSize <= 0) {
+    private synchronized void push(@NonNull CharPosition pos) {
+        if (maxCacheCount <= 0) {
             return;
         }
-        mCachePositions.add(pos);
-        while (mCachePositions.size() > mMaxCacheSize) {
-            mCachePositions.remove(0);
+        cachedPositions.add(pos);
+        if (cachedPositions.size() > maxCacheCount) {
+            cachedPositions.remove(0);
         }
     }
 
@@ -306,8 +298,8 @@ public class CachedIndexer implements Indexer, ContentListener {
      *
      * @return max cache size
      */
-    protected int getMaxCacheSize() {
-        return mMaxCacheSize;
+    protected int getMaxCacheCount() {
+        return maxCacheCount;
     }
 
     /**
@@ -315,26 +307,8 @@ public class CachedIndexer implements Indexer, ContentListener {
      *
      * @param maxSize max cache size
      */
-    protected void setMaxCacheSize(int maxSize) {
-        mMaxCacheSize = maxSize;
-    }
-
-    /**
-     * For NoCacheIndexer
-     *
-     * @return whether handle changes
-     */
-    protected boolean isHandleEvent() {
-        return mHandleEvent;
-    }
-
-    /**
-     * For NoCacheIndexer
-     *
-     * @param handle Whether handle changes to refresh cache
-     */
-    protected void setHandleEvent(boolean handle) {
-        mHandleEvent = handle;
+    protected void setMaxCacheCount(int maxSize) {
+        maxCacheCount = maxSize;
     }
 
     @Override
@@ -362,18 +336,22 @@ public class CachedIndexer implements Indexer, ContentListener {
 
     @Override
     public void getCharPosition(int index, @NonNull CharPosition dest) {
-        throwIfHas();
-        mContent.checkIndex(index);
-        CharPosition pos = findNearestByIndex(index);
-        if (pos.index == index) {
-            dest.set(pos);
-        } else if (pos.index < index) {
-            findIndexForward(pos, index, dest);
-        } else {
-            findIndexBackward(pos, index, dest);
-        }
-        if (Math.abs(index - pos.index) >= mSwitchIndex) {
-            push(dest.fromThis());
+        content.checkIndex(index);
+        content.lock(false);
+        try {
+            CharPosition pos = findNearestByIndex(index);
+            if (pos.index == index) {
+                dest.set(pos);
+            } else if (pos.index < index) {
+                findIndexForward(pos, index, dest);
+            } else {
+                findIndexBackward(pos, index, dest);
+            }
+            if (Math.abs(index - pos.index) >= thresholdIndex) {
+                push(dest.fromThis());
+            }
+        } finally {
+            content.unlock(false);
         }
     }
 
@@ -387,73 +365,76 @@ public class CachedIndexer implements Indexer, ContentListener {
 
     @Override
     public void getCharPosition(int line, int column, @NonNull CharPosition dest) {
-        throwIfHas();
-        mContent.checkLineAndColumn(line, column, true);
-        CharPosition pos = findNearestByLine(line);
-        if (pos.line == line) {
-            dest.set(pos);
-            if (pos.column == column) {
-                return;
+        content.checkLineAndColumn(line, column);
+        content.lock(false);
+        try {
+            CharPosition pos = findNearestByLine(line);
+            if (pos.line == line) {
+                dest.set(pos);
+                if (pos.column == column) {
+                    return;
+                }
+                findInLine(dest, line, column);
+            } else if (pos.line < line) {
+                findLiCoForward(pos, line, column, dest);
+            } else {
+                findLiCoBackward(pos, line, column, dest);
             }
-            findInLine(dest, line, column);
-        } else if (pos.line < line) {
-            findLiCoForward(pos, line, column, dest);
-        } else {
-            findLiCoBackward(pos, line, column, dest);
-        }
-        if (Math.abs(pos.line - line) > mSwitchLine) {
-            push(dest.fromThis());
+            if (Math.abs(pos.line - line) > thresholdLine) {
+                push(dest.fromThis());
+            }
+        } finally {
+            content.unlock(false);
         }
     }
 
     @Override
-    public void beforeReplace(Content content) {
+    @UnsupportedUserUsage
+    public void beforeReplace(@NonNull Content content) {
         //Do nothing
     }
 
     @Override
-    public void afterInsert(Content content, int startLine, int startColumn, int endLine, int endColumn,
-                            CharSequence insertedContent) {
-        if (isHandleEvent()) {
-            for (CharPosition pos : mCachePositions) {
-                if (pos.line == startLine) {
-                    if (pos.column >= startColumn) {
-                        pos.index += insertedContent.length();
-                        pos.line += endLine - startLine;
-                        pos.column = endColumn + pos.column - startColumn;
-                    }
-                } else if (pos.line > startLine) {
+    @UnsupportedUserUsage
+    public synchronized void afterInsert(@NonNull Content content, int startLine, int startColumn, int endLine, int endColumn,
+                                         @NonNull CharSequence insertedContent) {
+        for (var pos : cachedPositions) {
+            if (pos.line == startLine) {
+                if (pos.column >= startColumn) {
                     pos.index += insertedContent.length();
                     pos.line += endLine - startLine;
+                    pos.column = endColumn + pos.column - startColumn;
                 }
+            } else if (pos.line > startLine) {
+                pos.index += insertedContent.length();
+                pos.line += endLine - startLine;
             }
         }
-        detectException();
+        updateEnd();
     }
 
     @Override
-    public void afterDelete(Content content, int startLine, int startColumn, int endLine, int endColumn,
-                            CharSequence deletedContent) {
-        if (isHandleEvent()) {
-            List<CharPosition> garbage = new ArrayList<>();
-            for (CharPosition pos : mCachePositions) {
-                if (pos.line == startLine) {
-                    if (pos.column >= startColumn)
-                        garbage.add(pos);
-                } else if (pos.line > startLine) {
-                    if (pos.line < endLine) {
-                        garbage.add(pos);
-                    } else if (pos.line == endLine) {
-                        garbage.add(pos);
-                    } else {
-                        pos.index -= deletedContent.length();
-                        pos.line -= endLine - startLine;
-                    }
+    @UnsupportedUserUsage
+    public synchronized void afterDelete(@NonNull Content content, int startLine, int startColumn, int endLine, int endColumn,
+                                         @NonNull CharSequence deletedContent) {
+        List<CharPosition> garbage = new ArrayList<>();
+        for (CharPosition pos : cachedPositions) {
+            if (pos.line == startLine) {
+                if (pos.column >= startColumn)
+                    garbage.add(pos);
+            } else if (pos.line > startLine) {
+                if (pos.line < endLine) {
+                    garbage.add(pos);
+                } else if (pos.line == endLine) {
+                    garbage.add(pos);
+                } else {
+                    pos.index -= deletedContent.length();
+                    pos.line -= endLine - startLine;
                 }
             }
-            mCachePositions.removeAll(garbage);
         }
-        detectException();
+        cachedPositions.removeAll(garbage);
+        updateEnd();
     }
 
 }

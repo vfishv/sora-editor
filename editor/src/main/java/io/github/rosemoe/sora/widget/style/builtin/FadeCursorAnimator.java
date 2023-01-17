@@ -1,7 +1,7 @@
 /*
  *    sora-editor - the awesome code editor for Android
  *    https://github.com/Rosemoe/sora-editor
- *    Copyright (C) 2020-2022  Rosemoe
+ *    Copyright (C) 2020-2023  Rosemoe
  *
  *     This library is free software; you can redistribute it and/or
  *     modify it under the terms of the GNU Lesser General Public
@@ -51,7 +51,7 @@ public class FadeCursorAnimator implements CursorAnimator, ValueAnimator.Animato
         this.editor = editor;
         this.fadeInAnimator = new ValueAnimator();
         this.fadeOutAnimator = new ValueAnimator();
-        this.duration = 100;
+        this.duration = 200;
     }
 
     @Override
@@ -107,13 +107,18 @@ public class FadeCursorAnimator implements CursorAnimator, ValueAnimator.Animato
         fadeOutAnimator = ValueAnimator.ofInt(255, 0);
         fadeOutAnimator.addListener(new Animator.AnimatorListener() {
             @Override
-            public void onAnimationCancel(Animator animator) {}
+            public void onAnimationCancel(Animator animator) {
+            }
+
             @Override
-            public void onAnimationRepeat(Animator animator) {}
+            public void onAnimationRepeat(Animator animator) {
+            }
+
             @Override
             public void onAnimationStart(Animator animator) {
                 phaseEnded = false;
             }
+
             @Override
             public void onAnimationEnd(Animator animator) {
                 phaseEnded = true;
@@ -130,7 +135,8 @@ public class FadeCursorAnimator implements CursorAnimator, ValueAnimator.Animato
 
     @Override
     public void start() {
-        if (!editor.isCursorAnimationEnabled()) {
+        if (!editor.isCursorAnimationEnabled() || System.currentTimeMillis() - lastAnimateTime < 100) {
+            lastAnimateTime = System.currentTimeMillis();
             return;
         }
         fadeOutAnimator.start();
@@ -140,7 +146,7 @@ public class FadeCursorAnimator implements CursorAnimator, ValueAnimator.Animato
 
     @Override
     public float animatedX() {
-        if (phaseEnded) {
+        if (phaseEnded || editor.getInsertHandleDescriptor().position.isEmpty()) {
             return endX;
         }
         return startX;
@@ -148,7 +154,7 @@ public class FadeCursorAnimator implements CursorAnimator, ValueAnimator.Animato
 
     @Override
     public float animatedY() {
-        if (phaseEnded) {
+        if (phaseEnded || editor.getInsertHandleDescriptor().position.isEmpty()) {
             return endY;
         }
         return startY;
@@ -167,7 +173,6 @@ public class FadeCursorAnimator implements CursorAnimator, ValueAnimator.Animato
     @Override
     public void onAnimationUpdate(ValueAnimator animation) {
         editor.getHandleStyle().setAlpha((int) animation.getAnimatedValue());
-        editor.getEditorPainter().invalidateInCursor();
         editor.postInvalidateOnAnimation();
     }
 }

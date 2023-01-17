@@ -1,7 +1,7 @@
 /*
  *    sora-editor - the awesome code editor for Android
  *    https://github.com/Rosemoe/sora-editor
- *    Copyright (C) 2020-2022  Rosemoe
+ *    Copyright (C) 2020-2023  Rosemoe
  *
  *     This library is free software; you can redistribute it and/or
  *     modify it under the terms of the GNU Lesser General Public
@@ -35,15 +35,13 @@ import io.github.rosemoe.sora.widget.style.CursorAnimator;
  */
 public class MoveCursorAnimator implements CursorAnimator, ValueAnimator.AnimatorUpdateListener {
 
+    private final CodeEditor editor;
+    private final long duration;
     private ValueAnimator animatorX;
     private ValueAnimator animatorY;
     private ValueAnimator animatorBgBottom;
     private ValueAnimator animatorBackground;
-
-    private final CodeEditor editor;
     private float startX, startY, startSize, startBottom;
-
-    private final long duration;
     private long lastAnimateTime;
 
     public MoveCursorAnimator(CodeEditor editor) {
@@ -55,13 +53,17 @@ public class MoveCursorAnimator implements CursorAnimator, ValueAnimator.Animato
         duration = 120;
     }
 
+    private int getHeightOfRows(int rowCount) {
+        return editor.getRowHeight() * rowCount;
+    }
+
     @Override
     public void markStartPos() {
         var line = editor.getCursor().getLeftLine();
         float[] pos = editor.getLayout().getCharLayoutOffset(line, editor.getCursor().getLeftColumn());
         startX = editor.measureTextRegionOffset() + pos[1];
-        startY = pos[0];
-        startSize = editor.getLayout().getRowCountForLine(line) * editor.getRowHeight();
+        startY = pos[0] - minusHeight();
+        startSize = getHeightOfRows(editor.getLayout().getRowCountForLine(line));
         startBottom = editor.getLayout().getCharLayoutOffset(line, editor.getText().getColumnCount(line))[0];
     }
 
@@ -76,6 +78,10 @@ public class MoveCursorAnimator implements CursorAnimator, ValueAnimator.Animato
         animatorY.cancel();
         animatorBackground.cancel();
         animatorBgBottom.cancel();
+    }
+
+    private float minusHeight() {
+        return editor.getProps().textBackgroundWrapTextOnly ? editor.getLineSpacingPixels() / 2f : 0f;
     }
 
     @Override
@@ -98,9 +104,9 @@ public class MoveCursorAnimator implements CursorAnimator, ValueAnimator.Animato
         float[] pos = editor.getLayout().getCharLayoutOffset(editor.getCursor().getLeftLine(), editor.getCursor().getLeftColumn());
 
         animatorX = ValueAnimator.ofFloat(startX, (pos[1] + editor.measureTextRegionOffset()));
-        animatorY = ValueAnimator.ofFloat(startY, pos[0]);
+        animatorY = ValueAnimator.ofFloat(startY, pos[0] - minusHeight());
 
-        animatorBackground = ValueAnimator.ofFloat(startSize, editor.getLayout().getRowCountForLine(editor.getCursor().getLeftLine()) * editor.getRowHeight());
+        animatorBackground = ValueAnimator.ofFloat(startSize, getHeightOfRows(editor.getLayout().getRowCountForLine(editor.getCursor().getLeftLine())));
         animatorBgBottom = ValueAnimator.ofFloat(startBottom, editor.getLayout().getCharLayoutOffset(line, editor.getText().getColumnCount(line))[0]);
 
         animatorX.addUpdateListener(this);
@@ -113,7 +119,8 @@ public class MoveCursorAnimator implements CursorAnimator, ValueAnimator.Animato
 
     @Override
     public void start() {
-        if (!editor.isCursorAnimationEnabled()) {
+        if (!editor.isCursorAnimationEnabled() || System.currentTimeMillis() - lastAnimateTime < 100) {
+            lastAnimateTime = System.currentTimeMillis();
             return;
         }
         animatorX.start();

@@ -1,7 +1,7 @@
 /*
  *    sora-editor - the awesome code editor for Android
  *    https://github.com/Rosemoe/sora-editor
- *    Copyright (C) 2020-2022  Rosemoe
+ *    Copyright (C) 2020-2023  Rosemoe
  *
  *     This library is free software; you can redistribute it and/or
  *     modify it under the terms of the GNU Lesser General Public
@@ -26,6 +26,7 @@ package io.github.rosemoe.sora.lang.styling;
 import java.util.List;
 
 import io.github.rosemoe.sora.text.CharPosition;
+import io.github.rosemoe.sora.widget.schemes.EditorColorScheme;
 
 /**
  * Spans object saves spans in editor.
@@ -57,7 +58,7 @@ public interface Spans {
 
     /**
      * Modify the content.
-     *
+     * <p>
      * Optional to implement.
      */
     Modifier modify();
@@ -75,7 +76,7 @@ public interface Spans {
         /**
          * Start reading the spans on the given line.
          * You may prepare some data here if the actual spans are not stored by {@link Span} objects.
-         *
+         * <p>
          * line may be -1 to release the reader.
          */
         void moveToLine(int line);
@@ -109,7 +110,7 @@ public interface Spans {
          * but the content of it can be copied.
          * <p>
          * If the line index exceeds the current capacity, implementation of this should expand the capacity
-         * without throwing an exception. Set spans of the filled lines to color {@link io.github.rosemoe.sora.widget.schemes.EditorColorScheme#TEXT_NORMAL}
+         * without throwing an exception. Set spans of the filled lines to color {@link EditorColorScheme#TEXT_NORMAL}
          * or extends previous styles.
          */
         void setSpansOnLine(int line, List<Span> spans);

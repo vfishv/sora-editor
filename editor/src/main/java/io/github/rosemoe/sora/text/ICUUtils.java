@@ -1,7 +1,7 @@
 /*
  *    sora-editor - the awesome code editor for Android
  *    https://github.com/Rosemoe/sora-editor
- *    Copyright (C) 2020-2022  Rosemoe
+ *    Copyright (C) 2020-2023  Rosemoe
  *
  *     This library is free software; you can redistribute it and/or
  *     modify it under the terms of the GNU Lesser General Public
@@ -39,12 +39,13 @@ public class ICUUtils {
 
     /**
      * Get word edges for the given offset
-     * @param text Text to analyze
+     *
+     * @param text   Text to analyze
      * @param offset Required char offset of word
      * @return Packed value of (start, end) pair. Always contains the position {@code offset}
      */
-    public static long getWordEdges(CharSequence text, int offset) {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+    public static long getWordEdges(CharSequence text, int offset, boolean useIcu) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N && useIcu) {
             var itr = BreakIterator.getWordInstance();
             itr.setText(new CharSequenceIterator(text));
             int end = itr.following(offset);
@@ -60,20 +61,21 @@ public class ICUUtils {
     }
 
     /**
-     * Primitive implementation of {@link #getWordEdges(CharSequence, int)}
+     * Primitive implementation of {@link #getWordEdges(CharSequence, int, boolean)} when ICU is not enabled
      */
-    private static long getWordEdgesFallback(CharSequence text, int offset) {
+    public static long getWordEdgesFallback(CharSequence text, int offset) {
         int start = offset;
         int end = offset;
-        while (start > 0 && MyCharacter.isJavaIdentifierPart(text.charAt(start - 1))) {
-            start--;
-        }
         while (end < text.length() && MyCharacter.isJavaIdentifierPart(text.charAt(end))) {
             end++;
         }
+        if (end > offset) {
+            while (start > 0 && MyCharacter.isJavaIdentifierPart(text.charAt(start - 1))) {
+                start--;
+            }
+        }
         return IntPair.pack(start, end);
     }
-
 
 
 }

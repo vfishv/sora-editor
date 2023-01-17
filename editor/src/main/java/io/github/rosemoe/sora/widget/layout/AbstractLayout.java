@@ -1,7 +1,7 @@
 /*
  *    sora-editor - the awesome code editor for Android
  *    https://github.com/Rosemoe/sora-editor
- *    Copyright (C) 2020-2022  Rosemoe
+ *    Copyright (C) 2020-2023  Rosemoe
  *
  *     This library is free software; you can redistribute it and/or
  *     modify it under the terms of the GNU Lesser General Public
@@ -23,9 +23,13 @@
  */
 package io.github.rosemoe.sora.widget.layout;
 
-import java.util.List;
+import androidx.annotation.NonNull;
 
-import io.github.rosemoe.sora.graphics.GraphicTextRow;
+import java.util.List;
+import java.util.concurrent.LinkedBlockingQueue;
+import java.util.concurrent.ThreadPoolExecutor;
+import java.util.concurrent.TimeUnit;
+
 import io.github.rosemoe.sora.lang.styling.Span;
 import io.github.rosemoe.sora.text.Content;
 import io.github.rosemoe.sora.text.ContentLine;
@@ -35,14 +39,25 @@ import io.github.rosemoe.sora.widget.CodeEditor;
  * Base layout implementation of {@link Layout}.
  * It provides some convenient methods to editor instance and text measuring.
  *
- * @author Rose
+ * @author Rosemoe
  */
 public abstract class AbstractLayout implements Layout {
+
+    protected static final int SUBTASK_COUNT = 8;
+    protected static final int MIN_LINE_COUNT_FOR_SUBTASK = 3000;
+    protected static final BidiLayoutHelper BidiLayout = BidiLayoutHelper.INSTANCE;
+    private static final ThreadPoolExecutor executor;
+
+    static {
+        int maximumPoolSize = Math.max(2, Runtime.getRuntime().availableProcessors()); // available processor count changes during runtime
+        final int corePoolSize = 2;
+        executor = new ThreadPoolExecutor(corePoolSize, maximumPoolSize, 1, TimeUnit.MINUTES, new LinkedBlockingQueue<>(128));
+    }
 
     protected CodeEditor editor;
     protected Content text;
 
-    public AbstractLayout(CodeEditor editor, Content text) {
+    public AbstractLayout(@NonNull CodeEditor editor, @NonNull Content text) {
         this.editor = editor;
         this.text = text;
     }
@@ -51,33 +66,85 @@ public abstract class AbstractLayout implements Layout {
         return editor.getSpansForLine(line);
     }
 
-    protected float[] orderedFindCharIndex(float targetOffset, ContentLine str, int line, int index, int end) {
-        var gtr = GraphicTextRow.obtain();
-        gtr.set(str, index, end, editor.getTabWidth(), getSpans(line), editor.getTextPaint());
-        var res = gtr.findOffsetByAdvance(index, targetOffset);
-        GraphicTextRow.recycle(gtr);
-        return res;
-    }
-
-    protected float[] orderedFindCharIndex(float targetOffset, ContentLine str, int line) {
-       return orderedFindCharIndex(targetOffset, str, line, 0, str.length());
-    }
-
-
     @Override
-    public void afterDelete(Content content, int startLine, int startColumn, int endLine, int endColumn, CharSequence deletedContent) {
+    public void afterDelete(@NonNull Content content, int startLine, int startColumn, int endLine, int endColumn, @NonNull CharSequence deletedContent) {
 
     }
 
     @Override
-    public void afterInsert(Content content, int startLine, int startColumn, int endLine, int endColumn, CharSequence insertedContent) {
+    public void afterInsert(@NonNull Content content, int startLine, int startColumn, int endLine, int endColumn, @NonNull CharSequence insertedContent) {
 
+    }
+
+    @Override
+    public void onRemove(@NonNull Content content, @NonNull ContentLine line) {
+        // do nothing
     }
 
     @Override
     public void destroyLayout() {
         editor = null;
         text = null;
+    }
+
+    protected void submitTask(LayoutTask<?> task) {
+        executor.submit(task);
+    }
+
+    protected static class TaskMonitor {
+
+        private final int taskCount;
+        private final Object[] results;
+        private final Callback callback;
+        private int completedCount = 0;
+        private int cancelledCount = 0;
+
+        public TaskMonitor(int totalTask, Callback callback) {
+            taskCount = totalTask;
+            results = new Object[totalTask];
+            this.callback = callback;
+        }
+
+        public synchronized void reportCompleted(Object result) {
+            results[completedCount++] = result;
+            if (completedCount == taskCount) {
+                callback.onCompleted(results, cancelledCount);
+            }
+        }
+
+        public synchronized void reportCancelled() {
+            cancelledCount ++;
+            reportCompleted(null);
+        }
+
+        public interface Callback {
+            void onCompleted(Object[] results, int cancelledCount);
+        }
+
+    }
+
+    protected abstract class LayoutTask<T> implements Runnable {
+        private final TaskMonitor monitor;
+
+        protected LayoutTask(TaskMonitor monitor) {
+            this.monitor = monitor;
+        }
+
+        protected boolean shouldRun() {
+            return editor != null;
+        }
+
+        @Override
+        public void run() {
+            if (shouldRun()) {
+                var result = compute();
+                monitor.reportCompleted(result);
+            } else {
+                monitor.reportCancelled();
+            }
+        }
+
+        protected abstract T compute();
     }
 
 }

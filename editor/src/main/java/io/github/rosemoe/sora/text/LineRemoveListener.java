@@ -1,7 +1,7 @@
 /*
  *    sora-editor - the awesome code editor for Android
  *    https://github.com/Rosemoe/sora-editor
- *    Copyright (C) 2020-2022  Rosemoe
+ *    Copyright (C) 2020-2023  Rosemoe
  *
  *     This library is free software; you can redistribute it and/or
  *     modify it under the terms of the GNU Lesser General Public
@@ -23,6 +23,8 @@
  */
 package io.github.rosemoe.sora.text;
 
+import androidx.annotation.NonNull;
+
 /**
  * A listener to know when a ContentLine object is removed from Content object
  *
@@ -36,6 +38,6 @@ public interface LineRemoveListener {
      * @param content Caller Content
      * @param line    ContentLine object removed
      */
-    void onRemove(Content content, ContentLine line);
+    void onRemove(@NonNull Content content, @NonNull ContentLine line);
 
 }

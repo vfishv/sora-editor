@@ -1,7 +1,7 @@
 /*
  *    sora-editor - the awesome code editor for Android
  *    https://github.com/Rosemoe/sora-editor
- *    Copyright (C) 2020-2022  Rosemoe
+ *    Copyright (C) 2020-2023  Rosemoe
  *
  *     This library is free software; you can redistribute it and/or
  *     modify it under the terms of the GNU Lesser General Public
@@ -37,14 +37,19 @@ import android.util.TypedValue;
 import android.view.Gravity;
 import android.view.LayoutInflater;
 import android.view.PixelCopy;
+import android.view.View;
 import android.widget.ImageView;
 import android.widget.PopupWindow;
 
+import androidx.annotation.NonNull;
 import androidx.annotation.RequiresApi;
+
+import java.util.Objects;
 
 import io.github.rosemoe.sora.R;
 import io.github.rosemoe.sora.widget.CodeEditor;
-import io.github.rosemoe.sora.widget.EditorPainter;
+import io.github.rosemoe.sora.widget.EditorRenderer;
+import io.github.rosemoe.sora.widget.base.EditorPopupWindow;
 
 /**
  * Magnifier specially designed for CodeEditor
@@ -57,28 +62,70 @@ public class Magnifier implements EditorBuiltinComponent {
     private final PopupWindow popup;
     private final ImageView image;
     private final Paint paint;
-    private int x, y;
     private final float maxTextSize;
+    private int x, y;
     private long expectedRequestTime;
     private boolean enabled = true;
+    private boolean withinEditorForcibly = false;
+    private View parentView;
 
     /**
      * Scale factor for regions
      */
-    private final float scaleFactor;
+    private float scaleFactor;
 
-    public Magnifier(CodeEditor editor) {
+    public Magnifier(@NonNull CodeEditor editor) {
         view = editor;
-        popup = new PopupWindow(editor);
-        popup.setElevation(view.getDpUnit() * 8);
-        @SuppressLint("InflateParams") var view = LayoutInflater.from(editor.getContext()).inflate(R.layout.magnifier_popup, null);
+        parentView = editor;
+        popup = new PopupWindow();
+        popup.setElevation(view.getDpUnit() * 4);
+        @SuppressLint("InflateParams")
+        var view = LayoutInflater.from(editor.getContext()).inflate(R.layout.magnifier_popup, null);
         image = view.findViewById(R.id.magnifier_image_view);
         popup.setHeight((int) (editor.getDpUnit() * 70));
         popup.setWidth((int) (editor.getDpUnit() * 100));
         popup.setContentView(view);
         maxTextSize = TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_SP, 28, view.getResources().getDisplayMetrics());
-        scaleFactor = 1.35f;
+        scaleFactor = 1.25f;
         paint = new Paint();
+    }
+
+    /**
+     * @see #setParentView(View)
+     */
+    @NonNull
+    public View getParentView() {
+        return parentView;
+    }
+
+    /**
+     * Set parent view for popup
+     *
+     * @see EditorPopupWindow#setParentView(View)
+     */
+    public void setParentView(@NonNull View parentView) {
+        this.parentView = Objects.requireNonNull(parentView);
+    }
+
+    /**
+     * Get the scale factor of the image to be displayed in magnifier
+     *
+     * @see #setScaleFactor(float)
+     */
+    public float getScaleFactor() {
+        return scaleFactor;
+    }
+
+    /**
+     * Set the scale factor of the image to be displayed in magnifier
+     *
+     * @param scaleFactor Scale factor. Must not be under 1.0
+     */
+    public void setScaleFactor(float scaleFactor) {
+        if (scaleFactor <= 1.0f) {
+            throw new IllegalArgumentException("factor can not be under 1.0");
+        }
+        this.scaleFactor = scaleFactor;
     }
 
     @Override
@@ -92,6 +139,23 @@ public class Magnifier implements EditorBuiltinComponent {
         if (!enabled) {
             dismiss();
         }
+    }
+
+    /***
+     * @see #setWithinEditorForcibly(boolean)
+     */
+    public boolean isWithinEditorForcibly() {
+        return withinEditorForcibly;
+    }
+
+    /**
+     * If true, the magnifier will never try to copy pixels by system and create the image by
+     * editor.
+     * If you are trying to add the view into an activity by WindowManager, this should be enabled.
+     * Otherwise, the generated image may be wrong.
+     */
+    public void setWithinEditorForcibly(boolean withinEditorForcibly) {
+        this.withinEditorForcibly = withinEditorForcibly;
     }
 
     /**
@@ -111,7 +175,7 @@ public class Magnifier implements EditorBuiltinComponent {
             }
             return;
         }
-        popup.setWidth(Math.min(view.getWidth() * 3 / 5, (int)view.getDpUnit()) * 250);
+        popup.setWidth(Math.min(view.getWidth() * 3 / 5, (int) view.getDpUnit()) * 250);
         this.x = x;
         this.y = y;
         int[] pos = new int[2];
@@ -122,11 +186,11 @@ public class Magnifier implements EditorBuiltinComponent {
             right = view.getWidth() + pos[0];
             left = Math.max(0, right - popup.getWidth());
         }
-        var top = Math.max(pos[1] + y - popup.getHeight() - (int) (view.getRowHeight()), 0);
+        var top = Math.max(pos[1] + y - popup.getHeight() - view.getRowHeight(), 0);
         if (popup.isShowing()) {
             popup.update(left, top, popup.getWidth(), popup.getHeight());
         } else {
-            popup.showAtLocation(view, Gravity.START | Gravity.TOP, left, top);
+            popup.showAtLocation(parentView, Gravity.START | Gravity.TOP, left, top);
         }
         updateDisplay();
     }
@@ -148,18 +212,18 @@ public class Magnifier implements EditorBuiltinComponent {
     /**
      * Update the display of the magnifier without updating the window's
      * location on screen.
-     *
+     * <p>
      * This should be called when new content has been drawn on the target view so
      * that the content in magnifier will not be invalid.
-     *
+     * <p>
      * This method does not take effect if the magnifier is not currently shown
      */
     public void updateDisplay() {
         if (!isShowing()) {
             return;
         }
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O && view.getContext() instanceof Activity) {
-            updateDisplayOreo((Activity)view.getContext());
+        if (!withinEditorForcibly && Build.VERSION.SDK_INT >= Build.VERSION_CODES.O && view.getContext() instanceof Activity) {
+            updateDisplayOreo((Activity) view.getContext());
         } else {
             updateDisplayWithinEditor();
         }
@@ -167,7 +231,7 @@ public class Magnifier implements EditorBuiltinComponent {
 
     /**
      * Update display on API 26 or later.
-     *
+     * <p>
      * This will include other view in the window as {@link PixelCopy} is used to capture the
      * screen.
      */
@@ -202,7 +266,7 @@ public class Magnifier implements EditorBuiltinComponent {
                 }
                 if (statusCode == PixelCopy.SUCCESS) {
                     var dest = Bitmap.createBitmap(popup.getWidth(), popup.getHeight(), Bitmap.Config.ARGB_8888);
-                    var scaled = Bitmap.createScaledBitmap(clip, popup.getWidth(), popup.getHeight(), false);
+                    var scaled = Bitmap.createScaledBitmap(clip, popup.getWidth(), popup.getHeight(), true);
                     clip.recycle();
 
                     Canvas canvas = new Canvas(dest);
@@ -231,11 +295,15 @@ public class Magnifier implements EditorBuiltinComponent {
 
     /**
      * Update display on low API devices
-     *
+     * <p>
      * This method does not include other views as it obtain editor's display by
-     * directly calling {@link EditorPainter#drawView(Canvas)}
+     * directly calling {@link EditorRenderer#drawView(Canvas)}
      */
     private void updateDisplayWithinEditor() {
+        if (popup.getWidth() <= 0 || popup.getHeight() <= 0) {
+            dismiss();
+            return;
+        }
         var dest = Bitmap.createBitmap(popup.getWidth(), popup.getHeight(), Bitmap.Config.ARGB_8888);
         var requiredWidth = (int) (popup.getWidth() / scaleFactor);
         var requiredHeight = (int) (popup.getHeight() / scaleFactor);
@@ -259,7 +327,7 @@ public class Magnifier implements EditorBuiltinComponent {
         var viewCanvas = new Canvas(clip);
         viewCanvas.translate(-left, -top);
         view.draw(viewCanvas);
-        var scaled = Bitmap.createScaledBitmap(clip, popup.getWidth(), popup.getHeight(), false);
+        var scaled = Bitmap.createScaledBitmap(clip, popup.getWidth(), popup.getHeight(), true);
         clip.recycle();
 
         Canvas canvas = new Canvas(dest);

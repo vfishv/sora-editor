@@ -1,7 +1,7 @@
 /*
  *    sora-editor - the awesome code editor for Android
  *    https://github.com/Rosemoe/sora-editor
- *    Copyright (C) 2020-2022  Rosemoe
+ *    Copyright (C) 2020-2023  Rosemoe
  *
  *     This library is free software; you can redistribute it and/or
  *     modify it under the terms of the GNU Lesser General Public
@@ -30,6 +30,10 @@ package io.github.rosemoe.sora.widget.schemes;
  */
 public class SchemeDarcula extends EditorColorScheme {
 
+    public SchemeDarcula() {
+        super(true);
+    }
+
     @Override
     public void applyDefault() {
         super.applyDefault();
@@ -42,9 +46,12 @@ public class SchemeDarcula extends EditorColorScheme {
         setColor(COMMENT, 0xff808080);
         setColor(KEYWORD, 0xffcc7832);
         setColor(WHOLE_BACKGROUND, 0xff2b2b2b);
+        setColor(COMPLETION_WND_BACKGROUND, 0xff2b2b2b);
+        setColor(COMPLETION_WND_CORNER, 0xff999999);
         setColor(TEXT_NORMAL, 0xffffffff);
         setColor(LINE_NUMBER_BACKGROUND, 0xff313335);
         setColor(LINE_NUMBER, 0xff606366);
+        setColor(LINE_NUMBER_CURRENT, 0xff606366);
         setColor(LINE_DIVIDER, 0xff606366);
         setColor(SCROLL_BAR_THUMB, 0xffa6a6a6);
         setColor(SCROLL_BAR_THUMB_PRESSED, 0xff565656);
@@ -57,6 +64,7 @@ public class SchemeDarcula extends EditorColorScheme {
         setColor(BLOCK_LINE_CURRENT, 0xdd575757);
         setColor(NON_PRINTABLE_CHAR, 0xffdddddd);
         setColor(TEXT_SELECTED, 0xffffffff);
+        setColor(HIGHLIGHTED_DELIMITERS_FOREGROUND, 0xffffffff);
     }
 
 }

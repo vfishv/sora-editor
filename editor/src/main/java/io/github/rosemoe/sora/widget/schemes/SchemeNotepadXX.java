@@ -1,7 +1,7 @@
 /*
  *    sora-editor - the awesome code editor for Android
  *    https://github.com/Rosemoe/sora-editor
- *    Copyright (C) 2020-2022  Rosemoe
+ *    Copyright (C) 2020-2023  Rosemoe
  *
  *     This library is free software; you can redistribute it and/or
  *     modify it under the terms of the GNU Lesser General Public
@@ -45,6 +45,7 @@ public class SchemeNotepadXX extends EditorColorScheme {
         setColor(TEXT_NORMAL, 0xff000000);
         setColor(LINE_NUMBER_BACKGROUND, 0xffe4e4e4);
         setColor(LINE_NUMBER, 0xff808080);
+        setColor(LINE_NUMBER_CURRENT, 0xff808080);
         setColor(SELECTED_TEXT_BACKGROUND, 0xff75d975);
         setColor(MATCHED_TEXT_BACKGROUND, 0xffc0c0c0);
         setColor(CURRENT_LINE, 0xffe8e8ff);

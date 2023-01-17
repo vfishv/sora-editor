@@ -1,7 +1,7 @@
 /*
  *    sora-editor - the awesome code editor for Android
  *    https://github.com/Rosemoe/sora-editor
- *    Copyright (C) 2020-2022  Rosemoe
+ *    Copyright (C) 2020-2023  Rosemoe
  *
  *     This library is free software; you can redistribute it and/or
  *     modify it under the terms of the GNU Lesser General Public
@@ -23,6 +23,8 @@
  */
 package io.github.rosemoe.sora.text;
 
+import androidx.annotation.NonNull;
+
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
@@ -38,23 +40,45 @@ public class ContentCreator {
     /**
      * Create a {@link Content} from stream
      */
-    public static Content fromStream(InputStream stream) throws IOException {
+    @NonNull
+    public static Content fromStream(@NonNull InputStream stream) throws IOException {
         return fromReader(new InputStreamReader(stream));
     }
 
     /**
      * Create a {@link Content} from reader
      */
-    public static Content fromReader(Reader reader) throws IOException {
+    @NonNull
+    public static Content fromReader(@NonNull Reader reader) throws IOException {
         var content = new Content();
         content.setUndoEnabled(false);
         var buffer = new char[8192 * 2];
         var wrapper = new CharArrayWrapper(buffer, 0);
         int count;
         while ((count = reader.read(buffer)) != -1) {
-            wrapper.setDataCount(count);
-            var line = content.getLineCount() - 1;
-            content.insert(line, content.getColumnCount(line), wrapper);
+            if (count > 0) {
+                if (buffer[count - 1] == '\r') {
+                    var peek = reader.read();
+                    if (peek == '\n') {
+                        wrapper.setDataCount(count - 1);
+                        var line = content.getLineCount() - 1;
+                        content.insert(line, content.getColumnCount(line), wrapper);
+                        line = content.getLineCount() - 1;
+                        content.insert(line, content.getColumnCount(line), "\r\n");
+                        continue;
+                    } else if (peek != -1) {
+                        wrapper.setDataCount(count);
+                        var line = content.getLineCount() - 1;
+                        content.insert(line, content.getColumnCount(line), wrapper);
+                        line = content.getLineCount() - 1;
+                        content.insert(line, content.getColumnCount(line), String.valueOf((char) peek));
+                        continue;
+                    }
+                }
+                wrapper.setDataCount(count);
+                var line = content.getLineCount() - 1;
+                content.insert(line, content.getColumnCount(line), wrapper);
+            }
         }
         reader.close();
         content.setUndoEnabled(true);

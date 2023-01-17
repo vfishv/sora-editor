@@ -1,7 +1,7 @@
 /*
  *    sora-editor - the awesome code editor for Android
  *    https://github.com/Rosemoe/sora-editor
- *    Copyright (C) 2020-2022  Rosemoe
+ *    Copyright (C) 2020-2023  Rosemoe
  *
  *     This library is free software; you can redistribute it and/or
  *     modify it under the terms of the GNU Lesser General Public
@@ -29,31 +29,46 @@ import java.io.IOException;
 import java.io.Reader;
 
 /**
- * Reference of a content due to accessed in read-only mode.
+ * Reference of a content due to be accessed in read-only mode.
  * Access can be validated during accesses.
  * {@link io.github.rosemoe.sora.text.TextReference.ValidateFailedException} may be thrown if the check is failed.
+ * The result of methods may be dirty when the content is modified.
  *
  * @author Rosemoe
  */
 public class ContentReference extends TextReference {
 
     private final Content content;
-    private final Indexer indexer;
-    private final CharPosition cached;
 
     public ContentReference(@NonNull Content ref) {
         super(ref);
         this.content = ref;
-        cached = new CharPosition();
-        // Use another Indexer to query characters by index, avoiding concurrent modification to cache list
-        this.indexer = new CachedIndexer(content);
     }
 
     @Override
     public char charAt(int index) {
         validateAccess();
-        indexer.getCharPosition(index, cached);
-        return content.charAt(cached.line, cached.column);
+        return content.charAt(index);
+    }
+
+    public char charAt(int line, int column) {
+        validateAccess();
+        return content.charAt(line, column);
+    }
+
+    public int getCharIndex(int line, int column) {
+        validateAccess();
+        return content.getCharIndex(line, column);
+    }
+
+    public CharPosition getCharPosition(int line, int column) {
+        validateAccess();
+        return content.getIndexer().getCharPosition(line, column);
+    }
+
+    public CharPosition getCharPosition(int index) {
+        validateAccess();
+        return content.getIndexer().getCharPosition(index);
     }
 
     /**
@@ -70,6 +85,14 @@ public class ContentReference extends TextReference {
     public int getColumnCount(int line) {
         validateAccess();
         return content.getColumnCount(line);
+    }
+
+    /**
+     * @see Content#getLineSeparatorUnsafe(int)
+     */
+    public String getLineSeparator(int line) {
+        validateAccess();
+        return content.getLineSeparatorUnsafe(line).getContent();
     }
 
     /**
@@ -94,6 +117,14 @@ public class ContentReference extends TextReference {
     public void appendLineTo(StringBuilder sb, int line) {
         validateAccess();
         content.getLine(line).appendTo(sb);
+    }
+
+    /**
+     * @see Content#getDocumentVersion()
+     */
+    public long getDocumentVersion() {
+        validateAccess();
+        return content.getDocumentVersion();
     }
 
     /**
@@ -128,16 +159,22 @@ public class ContentReference extends TextReference {
             }
             int read = 0;
             while (read < length && line < getLineCount()) {
-                var columnCount = getColumnCount(line);
+                var targetLine = content.getLine(line);
+                var separatorLength = targetLine.getLineSeparator().getLength();
+                var columnCount = targetLine.length();
                 int toRead = Math.min(columnCount - column, length - read);
+                toRead = Math.max(0, toRead);
                 if (toRead > 0) {
                     content.getRegionOnLine(line, column, column + toRead, chars, offset + read);
                 }
                 column += toRead;
                 read += toRead;
-                if (read < length && columnCount == column) {
-                    chars[offset + read] = '\n';
-                    read ++;
+                while (read < length && columnCount <= column && column < columnCount + separatorLength) {
+                    chars[offset + read] = targetLine.getLineSeparator().getContent().charAt(column - columnCount);
+                    read++;
+                    column++;
+                }
+                if (column >= columnCount + separatorLength) {
                     line++;
                     column = 0;
                 }

@@ -2,7 +2,7 @@
 <!--~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
   ~    sora-editor - the awesome code editor for Android
   ~    https://github.com/Rosemoe/sora-editor
-  ~    Copyright (C) 2020-2022  Rosemoe
+  ~    Copyright (C) 2020-2023  Rosemoe
   ~
   ~     This library is free software; you can redistribute it and/or
   ~     modify it under the terms of the GNU Lesser General Public
@@ -25,19 +25,17 @@
 
 <resources>
 
-    <item name="paste" type="string">Paste</item>
-    <item name="copy" type="string">Copy</item>
-    <item name="selectAll" type="string" formatted="true">Select All</item>
-    <item name="saveToProject" type="string" translatable="false" >Project</item>
-    <item name="cut" type="string">Cut</item>
-    <item name="last" type="string">Last</item>
-    <item name="next" type="string">Next</item>
-    <item name="replace" type="string">Replace</item>
-    <item name="replaceAll" type="string">Replace All</item>
-    <item name="replacement" type="string">Replacement</item>
-    <item name="cancel" type="string">Cancel</item>
-    <item name="text_to_search" type="string">Text to search</item>
-
-    <item name="more" type="string" translatable="false" >More</item>
+    <string name="last">Last</string>
+    <string name="next">Next</string>
+    <string name="replace">Replace</string>
+    <string name="replaceAll">Replace All</string>
+    <string name="replacement">Replacement</string>
+    <string name="text_to_search">Text to search</string>
+    <string name="editor_search_replacing">Replacing texts…</string>
+    <string name="editor_search_busy">Editor is still preparing…</string>
+    <string name="editor_formatting">Formatting your code…</string>
+    <string name="more">More</string>
+    <string name="diagnostics_more_actions">More Actions...</string>
+    <string name="clip_text_length_too_large">Text is too large to copy</string>
 
 </resources>

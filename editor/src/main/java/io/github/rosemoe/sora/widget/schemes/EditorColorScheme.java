@@ -1,7 +1,7 @@
 /*
  *    sora-editor - the awesome code editor for Android
  *    https://github.com/Rosemoe/sora-editor
- *    Copyright (C) 2020-2022  Rosemoe
+ *    Copyright (C) 2020-2023  Rosemoe
  *
  *     This library is free software; you can redistribute it and/or
  *     modify it under the terms of the GNU Lesser General Public
@@ -24,6 +24,9 @@
 package io.github.rosemoe.sora.widget.schemes;
 
 import android.util.SparseIntArray;
+
+import androidx.annotation.NonNull;
+import androidx.annotation.Nullable;
 
 import java.lang.ref.WeakReference;
 import java.util.ArrayList;
@@ -65,6 +68,7 @@ import io.github.rosemoe.sora.widget.CodeEditor;
  * @author Rose
  */
 public class EditorColorScheme {
+
     //----------------Issue colors----------------
     public static final int PROBLEM_TYPO = 37;
     public static final int PROBLEM_WARNING = 36;
@@ -82,6 +86,17 @@ public class EditorColorScheme {
     public static final int COMMENT = 22;
     public static final int KEYWORD = 21;
     //-------------View colors---------------------
+    public static final int DIAGNOSTIC_TOOLTIP_ACTION = 56;
+    public static final int DIAGNOSTIC_TOOLTIP_DETAILED_MSG = 55;
+    public static final int DIAGNOSTIC_TOOLTIP_BRIEF_MSG = 54;
+    public static final int DIAGNOSTIC_TOOLTIP_BACKGROUND = 53;
+    public static final int FUNCTION_CHAR_BACKGROUND_STROKE = 52;
+    public static final int HARD_WRAP_MARKER = 51;
+    public static final int TEXT_INLAY_HINT_FOREGROUND = 50;
+    public static final int TEXT_INLAY_HINT_BACKGROUND = 49;
+    public static final int SNIPPET_BACKGROUND_EDITING = 48;
+    public static final int SNIPPET_BACKGROUND_RELATED = 47;
+    public static final int SNIPPET_BACKGROUND_INACTIVE = 46;
     public static final int SIDE_BLOCK_LINE = 38;
     public static final int NON_PRINTABLE_CHAR = 31;
 
@@ -90,14 +105,20 @@ public class EditorColorScheme {
      */
     public static final int TEXT_SELECTED = 30;
     public static final int MATCHED_TEXT_BACKGROUND = 29;
-    public static final int AUTO_COMP_PANEL_CORNER = 20;
-    public static final int AUTO_COMP_PANEL_BG = 19;
+    public static final int COMPLETION_WND_CORNER = 20;
+    public static final int COMPLETION_WND_BACKGROUND = 19;
+    public static final int COMPLETION_WND_TEXT_PRIMARY = 42;
+    public static final int COMPLETION_WND_TEXT_SECONDARY = 43;
+    public static final int COMPLETION_WND_ITEM_CURRENT = 44;
 
     /**
      * No longer supported
      */
     public static final int LINE_BLOCK_LABEL = 18;
 
+    public static final int HIGHLIGHTED_DELIMITERS_BACKGROUND = 41;
+    public static final int HIGHLIGHTED_DELIMITERS_UNDERLINE = 40;
+    public static final int HIGHLIGHTED_DELIMITERS_FOREGROUND = 39;
     public static final int LINE_NUMBER_PANEL_TEXT = 17;
     public static final int LINE_NUMBER_PANEL = 16;
     public static final int BLOCK_LINE_CURRENT = 15;
@@ -113,6 +134,7 @@ public class EditorColorScheme {
     public static final int TEXT_NORMAL = 5;
     public static final int WHOLE_BACKGROUND = 4;
     public static final int LINE_NUMBER_BACKGROUND = 3;
+    public static final int LINE_NUMBER_CURRENT = 45;
     public static final int LINE_NUMBER = 2;
     public static final int LINE_DIVIDER = 1;
 
@@ -124,15 +146,24 @@ public class EditorColorScheme {
     /**
      * Max pre-defined color id
      */
-    protected static final int END_COLOR_ID = 38;
+    protected static final int END_COLOR_ID = 56;
     /**
      * Real color saver
      */
-    protected final SparseIntArray mColors;
+    protected final SparseIntArray colors;
     /**
      * Host editor object
      */
-    private final List<WeakReference<CodeEditor>> mEditors;
+    private final List<WeakReference<CodeEditor>> editors;
+
+    private final boolean dark;
+
+    private final static int PRIMARY_TEXT_COLOR_DEFAULT_LIGHT = 0xff424242;
+    private final static int PRIMARY_TEXT_COLOR_DEFAULT_DARK = 0xfff5f5f5;
+    private final static int BACKGROUND_COLOR_LIGHT = 0xfffefefe;
+    private final static int BACKGROUND_COLOR_DARK = 0xff212121;
+    private final static int SECONDARY_TEXT_COLOR_LIGHT = 0xff616161;
+    private final static int SECONDARY_TEXT_COLOR_DARK = 0xffeeeeee;
 
     /**
      * Create a new ColorScheme for the given editor
@@ -145,28 +176,38 @@ public class EditorColorScheme {
     }
 
     /**
-     * For sub-classes
+     * Create a default color scheme
      */
     public EditorColorScheme() {
-        mColors = new SparseIntArray();
-        mEditors = new ArrayList<>();
+        this(false);
+    }
+
+    /**
+     * For subclass
+     *
+     * @param isDark Whether this is a dark theme
+     */
+    protected EditorColorScheme(boolean isDark) {
+        colors = new SparseIntArray();
+        editors = new ArrayList<>();
+        this.dark = isDark;
         applyDefault();
     }
 
     /**
      * Subscribe changes
-     *
+     * <p>
      * Called by editor
      */
     @UnsupportedUserUsage
-    public void attachEditor(CodeEditor editor) {
+    public void attachEditor(@NonNull CodeEditor editor) {
         Objects.requireNonNull(editor);
-        for (var ref : mEditors) {
+        for (var ref : editors) {
             if (ref.get() == editor) {
                 return;
             }
         }
-        mEditors.add(new WeakReference<>(editor));
+        editors.add(new WeakReference<>(editor));
         editor.onColorFullUpdate();
     }
 
@@ -174,8 +215,8 @@ public class EditorColorScheme {
      * Unsubscribe changes
      */
     @UnsupportedUserUsage
-    public void detachEditor(CodeEditor editor) {
-        var itr = mEditors.iterator();
+    public void detachEditor(@NonNull CodeEditor editor) {
+        var itr = editors.iterator();
         while (itr.hasNext()) {
             if (itr.next().get() == editor) {
                 itr.remove();
@@ -199,9 +240,10 @@ public class EditorColorScheme {
      * @param type The type
      */
     private void applyDefault(int type) {
-        int color = mColors.get(type);
+        int color = colors.get(type);
         switch (type) {
             case LINE_NUMBER:
+            case LINE_NUMBER_CURRENT:
                 color = 0xFF505050;
                 break;
             case LINE_NUMBER_BACKGROUND:
@@ -210,8 +252,8 @@ public class EditorColorScheme {
                 break;
             case WHOLE_BACKGROUND:
             case LINE_NUMBER_PANEL_TEXT:
-            case AUTO_COMP_PANEL_BG:
-            case AUTO_COMP_PANEL_CORNER:
+            case COMPLETION_WND_BACKGROUND:
+            case COMPLETION_WND_CORNER:
                 color = 0xffffffff;
                 break;
             case OPERATOR:
@@ -224,20 +266,20 @@ public class EditorColorScheme {
                 color = 0xdd536dfe;
                 break;
             case UNDERLINE:
-            case SIDE_BLOCK_LINE:
                 color = 0xff000000;
                 break;
             case SELECTION_HANDLE:
                 color = 0xff536dfe;
                 break;
             case ANNOTATION:
-            case FUNCTION_NAME:
+            case IDENTIFIER_NAME:
                 color = 0xFF03A9F4;
                 break;
             case CURRENT_LINE:
                 color = 0x10000000;
                 break;
             case SELECTED_TEXT_BACKGROUND:
+            case FUNCTION_CHAR_BACKGROUND_STROKE:
                 color = 0x2D3F51B5;
                 break;
             case KEYWORD:
@@ -267,11 +309,14 @@ public class EditorColorScheme {
                 color = 0xdd000000;
                 break;
             case BLOCK_LINE_CURRENT:
+            case SIDE_BLOCK_LINE:
                 color = 0xff999999;
                 break;
             case IDENTIFIER_VAR:
-            case IDENTIFIER_NAME:
-                color = 0xff333333;
+                color = 0xff546e7a;
+                break;
+            case FUNCTION_NAME:
+                color = 0xffe040fb;
                 break;
             case MATCHED_TEXT_BACKGROUND:
                 color = 0xffffff00;
@@ -288,6 +333,49 @@ public class EditorColorScheme {
             case PROBLEM_TYPO:
                 color = 0x6600ff11;
                 break;
+            case HIGHLIGHTED_DELIMITERS_FOREGROUND:
+                color = 0xdd000000;
+                break;
+            case HIGHLIGHTED_DELIMITERS_UNDERLINE:
+                color = 0xff3f51b5;
+                break;
+            case HIGHLIGHTED_DELIMITERS_BACKGROUND:
+                color = 0x1D000000;
+                break;
+            case COMPLETION_WND_TEXT_PRIMARY:
+            case COMPLETION_WND_TEXT_SECONDARY:
+            case TEXT_INLAY_HINT_FOREGROUND:
+                color = isDark() ? 0xffffffff : 0xff000000;
+                break;
+            case COMPLETION_WND_ITEM_CURRENT:
+                color = 0xffeeeeee;
+                break;
+            case SNIPPET_BACKGROUND_EDITING:
+                color = 0xffcccccc;
+                break;
+            case SNIPPET_BACKGROUND_RELATED:
+                color = 0xaadddddd;
+                break;
+            case SNIPPET_BACKGROUND_INACTIVE:
+                color = 0x66dddddd;
+                break;
+            case TEXT_INLAY_HINT_BACKGROUND:
+                color = isDark() ? 0xffeeeeee : 0x1D000000;
+                break;
+            case HARD_WRAP_MARKER:
+                color = !isDark() ? 0xffeeeeee : 0x1D000000;
+                break;
+            case DIAGNOSTIC_TOOLTIP_BRIEF_MSG:
+                color = isDark() ? PRIMARY_TEXT_COLOR_DEFAULT_DARK : PRIMARY_TEXT_COLOR_DEFAULT_LIGHT;
+                break;
+            case DIAGNOSTIC_TOOLTIP_DETAILED_MSG:
+                color = isDark() ? SECONDARY_TEXT_COLOR_DARK : SECONDARY_TEXT_COLOR_LIGHT;
+                break;
+            case DIAGNOSTIC_TOOLTIP_BACKGROUND:
+                color = isDark() ? BACKGROUND_COLOR_DARK : BACKGROUND_COLOR_LIGHT;
+                break;
+            case DIAGNOSTIC_TOOLTIP_ACTION:
+                color = 0xff42A5F5;
         }
         setColor(type, color);
     }
@@ -306,10 +394,10 @@ public class EditorColorScheme {
             return;
         }
 
-        mColors.put(type, color);
+        colors.put(type, color);
 
         //Notify the editor
-        var itr = mEditors.iterator();
+        var itr = editors.iterator();
         while (itr.hasNext()) {
             var editor = itr.next().get();
             if (editor == null) {
@@ -327,7 +415,54 @@ public class EditorColorScheme {
      * @return The color for type
      */
     public int getColor(int type) {
-        return mColors.get(type);
+        return colors.get(type);
+    }
+
+    /**
+     * Check whether this color scheme is dark
+     */
+    public boolean isDark() {
+        return dark;
+    }
+
+    private static EditorColorScheme globalDefault = new EditorColorScheme();
+
+    /**
+     * Get global default color scheme.
+     */
+    @NonNull
+    public static EditorColorScheme getDefault() {
+        return globalDefault;
+    }
+
+    /**
+     * Set global default color scheme. Newly created editor will use the new default color scheme.
+     * @param colorScheme new global color scheme, or null for restoring to built-in default
+     */
+    public static void setDefault(@Nullable EditorColorScheme colorScheme) {
+        setDefault(colorScheme, false);
+    }
+
+    /**
+     * Set global default color scheme and optionally update existing editors that are using default
+     * color scheme.
+     * @param colorScheme new global color scheme, or null for restoring to built-in default
+     * @param updateEditors update existing editors that are using default color scheme
+     */
+    public static void setDefault(@Nullable EditorColorScheme colorScheme, boolean updateEditors) {
+        if (colorScheme == null) {
+            colorScheme = new EditorColorScheme();
+        }
+        if (updateEditors) {
+            var editors = globalDefault.editors.toArray(new WeakReference[0]);
+            for (var ref : editors) {
+                var editor = (CodeEditor) ref.get();
+                if (editor != null) {
+                    editor.setColorScheme(colorScheme);
+                }
+            }
+        }
+        globalDefault = colorScheme;
     }
 
 }

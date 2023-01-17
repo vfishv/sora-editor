@@ -1,7 +1,7 @@
 /*
  *    sora-editor - the awesome code editor for Android
  *    https://github.com/Rosemoe/sora-editor
- *    Copyright (C) 2020-2022  Rosemoe
+ *    Copyright (C) 2020-2023  Rosemoe
  *
  *     This library is free software; you can redistribute it and/or
  *     modify it under the terms of the GNU Lesser General Public
@@ -27,12 +27,14 @@ import android.content.Context;
 import android.view.View;
 import android.widget.AdapterView;
 
+import androidx.annotation.NonNull;
+
 import io.github.rosemoe.sora.widget.schemes.EditorColorScheme;
 
 /**
  * Manages layout of {@link EditorAutoCompletion}
  * Can be set by {@link EditorAutoCompletion#setLayout(CompletionLayout)}
- *
+ * <p>
  * The implementation of this class must call {@link EditorAutoCompletion#select(int)} to select the
  * item in completion list when the user clicks one.
  */
@@ -42,22 +44,24 @@ public interface CompletionLayout {
     /**
      * Color scheme changed
      */
-    void onApplyColorScheme(EditorColorScheme colorScheme);
+    void onApplyColorScheme(@NonNull EditorColorScheme colorScheme);
 
     /**
      * Attach the {@link EditorAutoCompletion}.
      * This is called first before other methods are called.
      */
-    void setEditorCompletion(EditorAutoCompletion completion);
+    void setEditorCompletion(@NonNull EditorAutoCompletion completion);
 
     /**
      * Inflate the layout, return the view root.
      */
-    View inflate(Context context);
+    @NonNull
+    View inflate(@NonNull Context context);
 
     /**
      * Get the {@link AdapterView} to display completion items
      */
+    @NonNull
     AdapterView getCompletionList();
 
     /**
@@ -68,9 +72,17 @@ public interface CompletionLayout {
 
     /**
      * Make the given position visible
-     * @param position Item index
+     *
+     * @param position        Item index
      * @param incrementPixels If you scroll the layout, this is a recommended value of each scroll. {@link EditorCompletionAdapter#getItemHeight()}
      */
     void ensureListPositionVisible(int position, int incrementPixels);
 
+    /**
+     * Some layout may support to display more animations,
+     * this method provides control over the animation of the layout.
+     */
+    default void setEnabledAnimation(boolean enabledAnimation) {
+        //ignore
+    }
 }

@@ -1,7 +1,7 @@
 /*
  *    sora-editor - the awesome code editor for Android
  *    https://github.com/Rosemoe/sora-editor
- *    Copyright (C) 2020-2022  Rosemoe
+ *    Copyright (C) 2020-2023  Rosemoe
  *
  *     This library is free software; you can redistribute it and/or
  *     modify it under the terms of the GNU Lesser General Public
@@ -25,14 +25,13 @@ package io.github.rosemoe.sora.langs.textmate.folding;
 
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Stack;
 
 import io.github.rosemoe.sora.lang.analysis.AsyncIncrementalAnalyzeManager;
 import io.github.rosemoe.sora.text.Content;
-import io.github.rosemoe.sora.textmate.core.internal.oniguruma.OnigRegExp;
-import io.github.rosemoe.sora.textmate.core.internal.oniguruma.OnigResult;
-import io.github.rosemoe.sora.textmate.core.internal.oniguruma.OnigString;
-import io.github.rosemoe.sora.textmate.languageconfiguration.internal.supports.Folding;
+
+import org.eclipse.tm4e.core.internal.oniguruma.OnigRegExp;
+import org.eclipse.tm4e.core.internal.oniguruma.OnigResult;
+
 
 public class IndentRange {
     public static final int MAX_LINE_NUMBER = 0xFFFFFF;
@@ -96,15 +95,9 @@ public class IndentRange {
         return indent;
     }
 
-    @SuppressWarnings("rawtype")
-    public static FoldingRegions computeRanges(Content model, int tabSize , boolean offSide, Folding markers, int foldingRangesLimit, AsyncIncrementalAnalyzeManager.CodeBlockAnalyzeDelegate delegate) throws Exception {
+    public static FoldingRegions computeRanges(Content model, int tabSize, boolean offSide, FoldingHelper helper, OnigRegExp pattern, AsyncIncrementalAnalyzeManager<?, ?>.CodeBlockAnalyzeDelegate delegate) throws Exception {
 
-        RangesCollector result = new RangesCollector(foldingRangesLimit, tabSize);
-
-        OnigRegExp pattern = null;
-        if (markers != null) {
-            pattern = new OnigRegExp("(" + markers.getMarkersStart() + ")|(?:" + markers.getMarkersEnd() + ")");
-        }
+        RangesCollector result = new RangesCollector(/*tabSize*/);
 
         List<PreviousRegion> previousRegions = new ArrayList<>();
         int line = model.getLineCount() + 1;
@@ -112,8 +105,7 @@ public class IndentRange {
         previousRegions.add(new PreviousRegion(-1, line, line));
 
         for (line = model.getLineCount() - 1; line >= 0 && delegate.isNotCancelled(); line--) {
-            String lineContent = model.getLineString(line);
-            int indent = computeIndentLevel(model.getLine(line).getRawData(), model.getColumnCount(line), tabSize);
+            int indent = helper.getIndentFor(line);//computeIndentLevel(model.getLine(line).getRawData(), model.getColumnCount(line), tabSize);
             PreviousRegion previous = previousRegions.get(previousRegions.size() - 1);
             if (indent == -1) {
                 if (offSide) {
@@ -125,7 +117,7 @@ public class IndentRange {
                 continue; // only whitespace
             }
             OnigResult m;
-            if (pattern != null && (m = pattern.search(new OnigString(lineContent), 0)) != null) {
+            if (pattern != null && (m = helper.getResultFor(line)) != null) {
                 // folding pattern match
                 if (m.count() >= 2) { // start pattern match
                     // discard all regions until the folding pattern
