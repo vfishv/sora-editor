@@ -1,4 +1,4 @@
-/*
+/*******************************************************************************
  *    sora-editor - the awesome code editor for Android
  *    https://github.com/Rosemoe/sora-editor
  *    Copyright (C) 2020-2023  Rosemoe
@@ -20,41 +20,19 @@
  *
  *     Please contact Rosemoe by email 2073412493@qq.com if you need
  *     additional information or have any questions
- */
-package io.github.rosemoe.sora.text;
+ ******************************************************************************/
 
-import androidx.annotation.NonNull;
+package io.github.rosemoe.sora.event
 
-import java.io.IOException;
-import java.io.InputStream;
-import java.io.Reader;
+import io.github.rosemoe.sora.widget.CodeEditor
 
 /**
- * Utility class for creating {@link Content} objects.
+ * Called when the editor is going to be released. That's when [CodeEditor.release] is
+ *  called. You may subscribe this event to release resources when you are holding editor-specific
+ *  resources.
  *
- * @deprecated Use {@link ContentIO} class instead
- * @author Rosemoe
+ * Note that this event will only be triggered once on a certain editor.
+ *
+ *  @author Rosemoe
  */
-@Deprecated(since = "0.21.1", forRemoval = true)
-public class ContentCreator {
-
-    /**
-     * Create a {@link Content} from stream.
-     * The stream will get closed if the operation is successfully done.
-     */
-    @NonNull
-    public static Content fromStream(@NonNull InputStream stream) throws IOException {
-        return ContentIO.createFrom(stream);
-    }
-
-    /**
-     * Create a {@link Content} from reader.
-     * <p>
-     * The reader will get closed if the operation is successfully done.
-     */
-    @NonNull
-    public static Content fromReader(@NonNull Reader reader) throws IOException {
-        return ContentIO.createFrom(reader);
-    }
-
-}
+class EditorReleaseEvent(editor: CodeEditor) : Event(editor)

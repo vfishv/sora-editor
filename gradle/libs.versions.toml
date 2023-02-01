@@ -17,7 +17,7 @@ desugar = { module = "com.android.tools:desugar_jdk_libs", version = "1.2.2" }
 kotlinx-coroutines = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-android", version = "1.6.4" }
 kotlin-stdlib = { module = "org.jetbrains.kotlin:kotlin-stdlib", version.ref = "kotlin" }
 lifecycle-runtime = { module = "androidx.lifecycle:lifecycle-runtime-ktx", version = "2.5.1"}
-material = { module = "com.google.android.material:material", version = "1.7.0"}
+material = { module = "com.google.android.material:material", version = "1.8.0"}
 gms-instantapps = { module = "com.google.android.gms:play-services-instantapps", version = "18.0.1"}
 tree-sitter-java = { module = "io.github.itsaky:tree-sitter-java", version.ref = "tsBinding" }
 tree-sitter = { module = "io.github.itsaky:android-tree-sitter", version.ref = "tsBinding" }
@@ -26,7 +26,7 @@ leakcanary = { module = "com.squareup.leakcanary:leakcanary-android", version = 
 junit = { module = "junit:junit", version = "4.13.2" }
 gson = { module = "com.google.code.gson:gson", version = "2.10.1" }
 jcodings = { module = "org.jruby.jcodings:jcodings", version = "1.0.58" }
-joni = { module = "org.jruby.joni:joni", version = "2.1.44" }
+joni = { module = "org.jruby.joni:joni", version = "2.1.46" }
 snakeyaml = { module = "org.yaml:snakeyaml", version = "1.33" }
 jdt-annotation = { module = "org.eclipse.jdt:org.eclipse.jdt.annotation", version = "2.2.700" }
 guava = { module = "com.google.guava:guava", version = "31.1-android" }
@@ -35,4 +35,4 @@ guava = { module = "com.google.guava:guava", version = "31.1-android" }
 android-application = { id = "com.android.application", version.ref = "agp" }
 android-library = { id = "com.android.library", version.ref = "agp" }
 kotlin = { id = "org.jetbrains.kotlin.android", version.ref = "kotlin" }
-publish = { id = "com.vanniktech.maven.publish.base", version = "0.23.1" }
+publish = { id = "com.vanniktech.maven.publish.base", version = "0.24.0" }

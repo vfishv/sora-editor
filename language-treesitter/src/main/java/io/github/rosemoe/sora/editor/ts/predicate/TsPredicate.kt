@@ -28,7 +28,7 @@ import com.itsaky.androidide.treesitter.TSQuery
 import com.itsaky.androidide.treesitter.TSQueryMatch
 
 /**
- * Predicate implementation
+ * Predicate client-side implementation
  */
 interface TsPredicate {
 
@@ -41,7 +41,8 @@ interface TsPredicate {
         tsQuery: TSQuery,
         text: CharSequence,
         match: TSQueryMatch,
-        predicate: List<TsClientPredicateStep>
+        predicateSteps: List<TsClientPredicateStep>,
+        syntheticCaptures: TsSyntheticCaptureContainer
     ): PredicateResult
 
 }

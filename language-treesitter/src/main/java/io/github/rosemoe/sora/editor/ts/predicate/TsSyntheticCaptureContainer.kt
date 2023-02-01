@@ -21,16 +21,37 @@
  *     Please contact Rosemoe by email 2073412493@qq.com if you need
  *     additional information or have any questions
  ******************************************************************************/
-@SuppressWarnings("unused")
-object Versions {
-    // Project versions
-    const val versionName = "0.21.0"
-    const val versionCode = 76
 
-    // Platform & Tool versions
-    const val buildToolsVersion = "33.0.1"
-    const val compileSdkVersion = 33
-    const val minSdkVersion = 21
-    const val minSdkVersionHighApi = 26
-    const val targetSdkVersion = 33
+package io.github.rosemoe.sora.editor.ts.predicate
+
+class TsSyntheticCaptureContainer(private val noAddOperation: Boolean = false) {
+
+    companion object {
+        val EMPTY_IMMUTABLE_CONTAINER = TsSyntheticCaptureContainer(true)
+    }
+
+    private val syntheticCaptures = mutableListOf<TsSyntheticCapture>()
+
+    val indices
+        get() = syntheticCaptures.indices
+
+    val size
+        get() = syntheticCaptures.size
+
+    operator fun get(index: Int) = syntheticCaptures[index]
+
+    fun addSyntheticCapture(syntheticCapture: TsSyntheticCapture) {
+        if (syntheticCapture.captureNode == null && syntheticCapture.captureText == null) {
+            throw IllegalArgumentException("at least one field between 'captureText' and 'captureNode' should be non-null")
+        }
+        if (noAddOperation) {
+            return
+        }
+        syntheticCaptures.add(syntheticCapture)
+    }
+
+    fun clear() {
+        syntheticCaptures.clear()
+    }
+
 }
