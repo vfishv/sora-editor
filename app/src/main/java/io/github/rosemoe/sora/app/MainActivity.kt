@@ -865,7 +865,7 @@ class MainActivity : AppCompatActivity() {
                     "Darcula for TM",
                     "Abyss for TM",
                     "Solarized(Dark) for TM(VSCode)",
-                    "TM theme from file"
+                    //"TM theme from file"
                 )
                 AlertDialog.Builder(this)
                     .setTitle(R.string.color_scheme)
@@ -905,7 +905,7 @@ class MainActivity : AppCompatActivity() {
                                 e.printStackTrace()
                             }
 
-                            10 -> loadTMTLauncher.launch("*/*")
+                            //10 -> loadTMTLauncher.launch("*/*")
                         }
                         resetColorScheme()
                         dialog.dismiss()
