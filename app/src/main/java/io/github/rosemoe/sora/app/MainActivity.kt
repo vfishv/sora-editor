@@ -41,11 +41,11 @@ import android.widget.PopupMenu
 import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts.GetContent
 import androidx.appcompat.app.AppCompatActivity
-import com.itsaky.androidide.treesitter.java.TSLanguageJava
+//import com.itsaky.androidide.treesitter.java.TSLanguageJava
 import io.github.rosemoe.sora.app.databinding.ActivityMainBinding
-import io.github.rosemoe.sora.editor.ts.LocalsCaptureSpec
-import io.github.rosemoe.sora.editor.ts.TsLanguage
-import io.github.rosemoe.sora.editor.ts.TsLanguageSpec
+//import io.github.rosemoe.sora.editor.ts.LocalsCaptureSpec
+//import io.github.rosemoe.sora.editor.ts.TsLanguage
+//import io.github.rosemoe.sora.editor.ts.TsLanguageSpec
 import io.github.rosemoe.sora.event.ContentChangeEvent
 import io.github.rosemoe.sora.event.EditorKeyEvent
 import io.github.rosemoe.sora.event.KeyBindingEvent
@@ -98,8 +98,8 @@ class MainActivity : AppCompatActivity() {
     companion object {
         init {
             // Load tree-sitter libraries
-            System.loadLibrary("android-tree-sitter")
-            System.loadLibrary("tree-sitter-java")
+            //System.loadLibrary("android-tree-sitter")
+            //System.loadLibrary("tree-sitter-java")
         }
 
     }
@@ -642,7 +642,7 @@ class MainActivity : AppCompatActivity() {
                             "TextMate JavaScript",
                             "TextMate MarkDown",
                             "TM Language from file",
-                            "Tree-sitter Java",
+                            //"Tree-sitter Java",
                             "None"
                         ), -1
                     ) { dialog: DialogInterface, which: Int ->
@@ -781,6 +781,7 @@ class MainActivity : AppCompatActivity() {
                             }
 
                             7 -> loadTMLLauncher.launch("*/*")
+                            /*
                             8 -> {
                                 val lang = TSLanguageJava.newInstance()
                                 editor.setEditorLanguage(TsLanguage(
@@ -819,6 +820,7 @@ class MainActivity : AppCompatActivity() {
                                     TextStyle.makeStyle(EditorColorScheme.OPERATOR) applyTo "operator"
                                 })
                             }
+                            */
 
                             else -> editor.setEditorLanguage(EmptyLanguage())
                         }

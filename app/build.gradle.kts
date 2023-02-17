@@ -99,10 +99,10 @@ dependencies {
     implementation(projects.languageJava)
     implementation(projects.languageTextmate)
 //    implementation(projects.editorLsp)
-    implementation(projects.languageTreesitter)
+//    implementation(projects.languageTreesitter)
 
     // Tree-sitter languages
-    implementation(libs.tree.sitter.java)
+//    implementation(libs.tree.sitter.java)
 
     // Kotlin coroutines
     implementation(libs.kotlinx.coroutines)
