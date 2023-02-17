@@ -641,7 +641,7 @@ class MainActivity : AppCompatActivity() {
                             "TextMate Html",
                             "TextMate JavaScript",
                             "TextMate MarkDown",
-                            "TM Language from file",
+                            //"TM Language from file",
                             //"Tree-sitter Java",
                             "None"
                         ), -1
@@ -780,7 +780,7 @@ class MainActivity : AppCompatActivity() {
                                 e.printStackTrace()
                             }
 
-                            7 -> loadTMLLauncher.launch("*/*")
+                            //7 -> loadTMLLauncher.launch("*/*")
                             /*
                             8 -> {
                                 val lang = TSLanguageJava.newInstance()
