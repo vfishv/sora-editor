@@ -98,7 +98,7 @@ dependencies {
     implementation(projects.editor)
     implementation(projects.languageJava)
     implementation(projects.languageTextmate)
-    implementation(projects.editorLsp)
+//    implementation(projects.editorLsp)
     implementation(projects.languageTreesitter)
 
     // Tree-sitter languages
@@ -108,8 +108,8 @@ dependencies {
     implementation(libs.kotlinx.coroutines)
 
     // Lua language server
-    implementation(fileTree("dir" to "libs", "includes" to listOf("*.jar")))
-    implementation(libs.lsp4j)
+//    implementation(fileTree("dir" to "libs", "includes" to listOf("*.jar")))
+//    implementation(libs.lsp4j)
 
     debugImplementation(libs.leakcanary)
     testImplementation(libs.junit)
