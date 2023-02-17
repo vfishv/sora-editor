@@ -83,7 +83,7 @@ android {
 
 dependencies {
     implementation(libs.androidx.constraintlayout)
-    implementation(libs.gms.instantapps)
+//    implementation(libs.gms.instantapps)
 
     // Desugar
     coreLibraryDesugaring(libs.desugar)
