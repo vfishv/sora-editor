@@ -540,7 +540,7 @@ class MainActivity : AppCompatActivity() {
                         .setPositiveButton(android.R.string.ok, null)
                         .show()
                 } else {
-                    startActivity(Intent(this, LspTestActivity::class.java))
+                    //startActivity(Intent(this, LspTestActivity::class.java))
                 }
             }
 
@@ -984,7 +984,7 @@ class MainActivity : AppCompatActivity() {
             }
 
             R.id.load_test_file -> {
-                openAssetsFile("samples/View.java")
+//                openAssetsFile("samples/View.java")
             }
         }
         return super.onOptionsItemSelected(item)
