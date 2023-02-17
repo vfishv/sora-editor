@@ -26,8 +26,9 @@ package io.github.rosemoe.sora.lsp.editor;
 import androidx.annotation.Nullable;
 import androidx.annotation.WorkerThread;
 
+import org.eclipse.lsp4j.Diagnostic;
 import org.eclipse.lsp4j.FormattingOptions;
-import org.eclipse.lsp4j.PublishDiagnosticsParams;
+import org.eclipse.lsp4j.SignatureHelp;
 import org.eclipse.lsp4j.TextDocumentSyncKind;
 
 import java.lang.ref.WeakReference;
@@ -47,6 +48,7 @@ import io.github.rosemoe.sora.lsp.client.languageserver.requestmanager.RequestMa
 import io.github.rosemoe.sora.lsp.client.languageserver.serverdefinition.LanguageServerDefinition;
 import io.github.rosemoe.sora.lsp.client.languageserver.wrapper.LanguageServerWrapper;
 import io.github.rosemoe.sora.lsp.editor.event.LspEditorContentChangeEventReceiver;
+import io.github.rosemoe.sora.lsp.editor.signature.SignatureHelpWindow;
 import io.github.rosemoe.sora.lsp.operations.Provider;
 import io.github.rosemoe.sora.lsp.operations.completion.CompletionProvider;
 import io.github.rosemoe.sora.lsp.operations.diagnostics.PublishDiagnosticsProvider;
@@ -58,6 +60,7 @@ import io.github.rosemoe.sora.lsp.operations.document.DocumentOpenProvider;
 import io.github.rosemoe.sora.lsp.operations.document.DocumentSaveProvider;
 import io.github.rosemoe.sora.lsp.operations.format.FullFormattingProvider;
 import io.github.rosemoe.sora.lsp.operations.format.RangeFormattingProvider;
+import io.github.rosemoe.sora.lsp.operations.signature.SignatureHelpProvider;
 import io.github.rosemoe.sora.lsp.requests.Timeout;
 import io.github.rosemoe.sora.lsp.requests.Timeouts;
 import io.github.rosemoe.sora.widget.CodeEditor;
@@ -70,8 +73,11 @@ public class LspEditor {
     private final LanguageServerDefinition serverDefinition;
 
     private final String currentFileUri;
+    private final LspEditorManager lspEditorManager;
 
     private WeakReference<CodeEditor> currentEditor;
+
+    private WeakReference<SignatureHelpWindow> signatureHelpWindowWeakReference;
 
     private Language wrapperLanguage;
 
@@ -89,18 +95,21 @@ public class LspEditor {
 
     private List<String> completionTriggers = Collections.emptyList();
 
+    private List<String> signatureHelpTriggers = Collections.emptyList();
+
+    private List<String> signatureHelpRetriggers = Collections.emptyList();
+
     private LspEditorContentChangeEventReceiver editorContentChangeEventReceiver;
 
-    private PublishDiagnosticsParams diagnosticsParams = null;
 
-
-    public LspEditor(String currentProjectPath, String currentFileUri, LanguageServerDefinition serverDefinition) {
+    public LspEditor(String currentProjectPath, String currentFileUri, LanguageServerDefinition serverDefinition, LspEditorManager lspEditorManager) {
         this.currentEditor = new WeakReference<>(null);
         this.providerManager = new LspProviderManager(this);
         this.currentLanguage = new LspLanguage(this);
+
+        this.lspEditorManager = lspEditorManager;
         this.currentFileUri = currentFileUri;
         this.projectPath = currentProjectPath;
-
         this.serverDefinition = serverDefinition;
 
         this.editorContentChangeEventReceiver = new LspEditorContentChangeEventReceiver(this);
@@ -121,8 +130,8 @@ public class LspEditor {
         if (unsubscribeFunction != null) {
             unsubscribeFunction.run();
         }
-
         currentEditor.setEditorLanguage(currentLanguage);
+        signatureHelpWindowWeakReference = new WeakReference<>(new SignatureHelpWindow(currentEditor));
 
         var subscriptionReceipt = currentEditor.subscribeEvent(ContentChangeEvent.class, editorContentChangeEventReceiver);
 
@@ -215,7 +224,8 @@ public class LspEditor {
     public void installFeatures() {
 
         //features
-        providerManager.addProviders(RangeFormattingProvider::new, DocumentOpenProvider::new, DocumentSaveProvider::new, DocumentChangeProvider::new, DocumentCloseProvider::new, PublishDiagnosticsProvider::new, CompletionProvider::new, FullFormattingProvider::new, ApplyEditsProvider::new, QueryDocumentDiagnosticsProvider::new);
+        providerManager.addProviders(RangeFormattingProvider::new, DocumentOpenProvider::new, DocumentSaveProvider::new, DocumentChangeProvider::new, DocumentCloseProvider::new, PublishDiagnosticsProvider::new, CompletionProvider::new, FullFormattingProvider::new, ApplyEditsProvider::new,
+                QueryDocumentDiagnosticsProvider::new, SignatureHelpProvider::new);
 
         //options
 
@@ -308,13 +318,17 @@ public class LspEditor {
 
 
     @Nullable
-    public PublishDiagnosticsParams getDiagnostics() {
-        return diagnosticsParams;
+    public List<Diagnostic> getDiagnostics() {
+        return lspEditorManager.diagnosticsContainer.getDiagnostics(currentFileUri);
     }
 
-    public void publishDiagnostics(PublishDiagnosticsParams publishDiagnosticsParams) {
-        this.diagnosticsParams = publishDiagnosticsParams;
-        getProviderManager().safeUseProvider(PublishDiagnosticsProvider.class).ifPresent(publishDiagnosticsFeature -> publishDiagnosticsFeature.execute(publishDiagnosticsParams));
+    public void onDiagnosticsUpdate() {
+        publishDiagnostics(getDiagnostics());
+    }
+
+    private void publishDiagnostics(List<Diagnostic> diagnostics) {
+        getProviderManager().safeUseProvider(PublishDiagnosticsProvider.class)
+                .ifPresent(publishDiagnosticsFeature -> publishDiagnosticsFeature.execute(diagnostics));
     }
 
 
@@ -362,6 +376,22 @@ public class LspEditor {
                 e.printStackTrace();
             }
         }
+    }
+
+    public void showSignatureHelp(SignatureHelp signatureHelp) {
+        var signatureHelpWindow = signatureHelpWindowWeakReference.get();
+        if (signatureHelpWindow == null) {
+            return;
+        }
+        var editor = currentEditor.get();
+        if (editor == null) {
+            return;
+        }
+        if (signatureHelp == null) {
+            editor.post(signatureHelpWindow::dismiss);
+            return;
+        }
+        editor.post(() -> signatureHelpWindow.show(signatureHelp));
     }
 
 
@@ -424,4 +454,52 @@ public class LspEditor {
     public List<String> getCompletionTriggers() {
         return this.completionTriggers;
     }
+
+    public void setSignatureHelpTriggers(List<String> signatureHelpTriggers) {
+        this.signatureHelpTriggers = new ArrayList<>(signatureHelpTriggers);
+    }
+
+    public List<String> getSignatureHelpTriggers() {
+        return this.signatureHelpTriggers;
+    }
+
+    public void setSignatureHelpRetriggers(List<String> signatureHelpRetriggers) {
+        if (signatureHelpRetriggers.size() < 1 && signatureHelpTriggers.size() > 0 && signatureHelpTriggers.contains("(")) {
+            this.signatureHelpRetriggers = List.of(")");
+            return;
+        }
+        this.signatureHelpRetriggers = signatureHelpRetriggers;
+    }
+
+    public List<String> getSignatureHelpRetriggers() {
+        return this.signatureHelpRetriggers;
+    }
+
+    public boolean hitRetrigger(CharSequence eventText) {
+        for (var trigger : signatureHelpRetriggers) {
+            if (trigger.contains(eventText)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    public boolean hitTrigger(CharSequence eventText) {
+        for (var trigger : signatureHelpTriggers) {
+            if (trigger.contains(eventText)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    public boolean isShowSignatureHelp() {
+        var signatureHelpWindow = signatureHelpWindowWeakReference.get();
+        if (signatureHelpWindow == null) {
+            return false;
+        }
+        return signatureHelpWindow.isShowing();
+    }
+
+
 }

@@ -94,27 +94,26 @@ public class LspLanguage implements Language {
     @Override
     public void requireAutoComplete(@NonNull ContentReference content, @NonNull CharPosition position, @NonNull CompletionPublisher publisher, @NonNull Bundle extraArguments) throws CompletionCancelledException {
 
-        var prefix = computePrefix(content, position);
-        Log.d("prefix", prefix);
-       /* if (prefix.length() == 0) {
+       /* if (getEditor().hitTrigger(line)) {
+            publisher.cancel();
             return;
         }*/
 
+        var prefix = computePrefix(content, position);
+        // Log.d("prefix", prefix);
+
         var prefixLength = prefix.length();
 
-        currentEditor.getProviderManager().safeUseProvider(DocumentChangeProvider.class)
-                .ifPresent(documentChangeFeature -> {
-                    var documentChangeFuture = documentChangeFeature.getFuture();
-                    if (!documentChangeFuture.isDone() || !documentChangeFuture.isCompletedExceptionally() || !documentChangeFuture.isCancelled()) {
-                        try {
-                            documentChangeFuture.get(1000, TimeUnit.MILLISECONDS);
-                        } catch (ExecutionException | InterruptedException |
-                                 TimeoutException ignored) {
+        currentEditor.getProviderManager().safeUseProvider(DocumentChangeProvider.class).ifPresent(documentChangeFeature -> {
+            var documentChangeFuture = documentChangeFeature.getFuture();
+            if (!documentChangeFuture.isDone() || !documentChangeFuture.isCompletedExceptionally() || !documentChangeFuture.isCancelled()) {
+                try {
+                    documentChangeFuture.get(1000, TimeUnit.MILLISECONDS);
+                } catch (ExecutionException | InterruptedException | TimeoutException ignored) {
 
-                        }
-                    }
-                });
-
+                }
+            }
+        });
 
         var completionList = new ArrayList<CompletionItem>();
 
@@ -125,12 +124,7 @@ public class LspLanguage implements Language {
                 return;
             }
 
-            completionFeature.execute(position).thenAccept(completions -> {
-                completions.forEach(completionItem -> {
-                    completionList.add(completionItemProvider.createCompletionItem(completionItem,
-                            currentEditor.getProviderManager().useProvider(ApplyEditsProvider.class), prefixLength));
-                });
-            }).exceptionally(throwable -> {
+            completionFeature.execute(position).thenAccept(completions -> completions.forEach(completionItem -> completionList.add(completionItemProvider.createCompletionItem(completionItem, currentEditor.getProviderManager().useProvider(ApplyEditsProvider.class), prefixLength)))).exceptionally(throwable -> {
                 publisher.cancel();
                 throw new CompletionCancelledException(throwable.getMessage());
             }).get(Timeout.getTimeout(Timeouts.COMPLETION), TimeUnit.MILLISECONDS);
@@ -139,14 +133,11 @@ public class LspLanguage implements Language {
         }
 
 
-        publisher.setComparator(
-                Comparators.getCompletionItemComparator(content, position, completionList)
-        );
+        publisher.setComparator(Comparators.getCompletionItemComparator(content, position, completionList));
 
         publisher.addItems(completionList);
 
         publisher.updateList();
-
     }
 
 

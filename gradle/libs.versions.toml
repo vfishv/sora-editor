@@ -1,6 +1,6 @@
 [versions]
-agp = "7.4.0"
-kotlin = "1.8.0"
+agp = "7.4.1"
+kotlin = "1.8.10"
 lifecycle = "2.5.1"
 tsBinding = "1.0.10"
 lsp4j = "0.19.0"
@@ -10,7 +10,7 @@ androidxAnnotation = "1.5.0"
 androidx-annotation = { module = "androidx.annotation:annotation", version.ref = "androidxAnnotation" }
 androidx-constraintlayout = { module = "androidx.constraintlayout:constraintlayout", version = "2.1.4" }
 androidx-core-ktx = { module = "androidx.core:core-ktx", version = "1.9.0" }
-androidx-appcompat = { module = "androidx.appcompat:appcompat", version = "1.6.0" }
+androidx-appcompat = { module = "androidx.appcompat:appcompat", version = "1.6.1" }
 androidx-test-junit = { module = "androidx.test.ext:junit", version = "1.1.5" }
 androidx-test-espresso = { module = "androidx.test.espresso:espresso-core", version = "3.5.1" }
 desugar = { module = "com.android.tools:desugar_jdk_libs", version = "1.2.2" }
@@ -26,7 +26,7 @@ leakcanary = { module = "com.squareup.leakcanary:leakcanary-android", version = 
 junit = { module = "junit:junit", version = "4.13.2" }
 gson = { module = "com.google.code.gson:gson", version = "2.10.1" }
 jcodings = { module = "org.jruby.jcodings:jcodings", version = "1.0.58" }
-joni = { module = "org.jruby.joni:joni", version = "2.1.46" }
+joni = { module = "org.jruby.joni:joni", version = "2.1.48" }
 snakeyaml = { module = "org.yaml:snakeyaml", version = "1.33" }
 jdt-annotation = { module = "org.eclipse.jdt:org.eclipse.jdt.annotation", version = "2.2.700" }
 guava = { module = "com.google.guava:guava", version = "31.1-android" }

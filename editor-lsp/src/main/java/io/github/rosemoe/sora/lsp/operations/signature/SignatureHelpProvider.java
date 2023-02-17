@@ -21,33 +21,29 @@
  *     Please contact Rosemoe by email 2073412493@qq.com if you need
  *     additional information or have any questions
  */
-package io.github.rosemoe.sora.lsp.operations.format;
+package io.github.rosemoe.sora.lsp.operations.signature;
 
-import android.util.Pair;
+import android.util.Log;
 
 import androidx.annotation.WorkerThread;
 
-import org.eclipse.lsp4j.DocumentRangeFormattingParams;
-import org.eclipse.lsp4j.FormattingOptions;
+import com.google.gson.Gson;
 
-import java.util.List;
-import java.util.Optional;
+import org.eclipse.lsp4j.SignatureHelpParams;
+
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
 
 import io.github.rosemoe.sora.lsp.client.languageserver.requestmanager.RequestManager;
 import io.github.rosemoe.sora.lsp.editor.LspEditor;
 import io.github.rosemoe.sora.lsp.operations.RunOnlyProvider;
-import io.github.rosemoe.sora.lsp.operations.document.ApplyEditsProvider;
 import io.github.rosemoe.sora.lsp.requests.Timeout;
 import io.github.rosemoe.sora.lsp.requests.Timeouts;
 import io.github.rosemoe.sora.lsp.utils.LSPException;
 import io.github.rosemoe.sora.lsp.utils.LspUtils;
-import io.github.rosemoe.sora.text.Content;
-import io.github.rosemoe.sora.text.TextRange;
+import io.github.rosemoe.sora.text.CharPosition;
 
-public class RangeFormattingProvider extends RunOnlyProvider<Pair<Content, TextRange>> {
-
+public class SignatureHelpProvider extends RunOnlyProvider<CharPosition> {
     private CompletableFuture<Void> future;
     private LspEditor editor;
 
@@ -67,44 +63,34 @@ public class RangeFormattingProvider extends RunOnlyProvider<Pair<Content, TextR
 
     @Override
     @WorkerThread
-    public void run(Pair<Content, TextRange> data) {
+    public void run(CharPosition position) {
         RequestManager manager = editor.getRequestManager();
 
         if (manager == null) {
             return;
         }
 
-        var formattingParams = new DocumentRangeFormattingParams();
-        formattingParams.setOptions(editor.getProviderManager().getOption(FormattingOptions.class));
+        var signatureHelpParams = new SignatureHelpParams(
+                LspUtils.createTextDocumentIdentifier(editor.getCurrentFileUri()),
+                LspUtils.createPosition(position)
+        );
 
-        formattingParams.setTextDocument(LspUtils.createTextDocumentIdentifier(editor.getCurrentFileUri()));
-        var textRange = data.second;
-        formattingParams.setRange(LspUtils.createRange(textRange));
+        var future = manager.signatureHelp(signatureHelpParams);
 
-        var content = data.first;
 
-        var formattingFuture = manager.rangeFormatting(formattingParams);
-
-        if (formattingFuture == null) {
-            future = CompletableFuture.completedFuture(null);
-            return;
-        }
-
-        future = manager.rangeFormatting(formattingParams).thenApply(list -> Optional.ofNullable(list).orElse(List.of())).thenAccept(list -> {
-            editor.getProviderManager().safeUseProvider(ApplyEditsProvider.class)
-                    .ifPresent(applyEditsFeature -> applyEditsFeature
-                            .execute(new Pair<>(list, content)));
-
+        future = future.thenApply(signatureHelp -> {
+            System.out.println(new Gson().toJson(signatureHelp));
+            return signatureHelp;
         });
 
 
         try {
-            future.get(Timeout.getTimeout(Timeouts.FORMATTING), TimeUnit.MILLISECONDS);
+            var signatureHelp = future.get(Timeout.getTimeout(Timeouts.SIGNATURE), TimeUnit.MILLISECONDS);
+            editor.showSignatureHelp(signatureHelp);
         } catch (Exception exception) {
-            throw new LSPException("Formatting code timeout");
-
+            // throw?
+            exception.printStackTrace();
+            Log.e("LSP client","show signatureHelp timeout");
         }
     }
-
-
 }
