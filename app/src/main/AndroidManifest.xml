@@ -48,12 +48,13 @@
         <profileable
             android:shell="true"
             tools:targetApi="q" />
-
+<!--
         <activity
             android:name=".TestActivity"
             android:configChanges="orientation|keyboardHidden|screenSize|uiMode"
             android:exported="false"
             android:windowSoftInputMode="adjustResize"/>
+-->
         <activity
             android:name=".LspTestActivity"
             android:configChanges="orientation|keyboardHidden|screenSize|uiMode"

@@ -102,7 +102,8 @@
                 android:title="@string/follow_scrollbar" />
         </menu>
     </item>
-    <item android:title="@string/debug">
+    <item android:title="@string/debug"
+        android:visible="false">
         <menu>
             <item
                 android:id="@+id/code_format"
@@ -132,6 +133,7 @@
 
     <item
         android:id="@+id/open_test_activity"
+        android:visible="false"
         android:title="@string/open_new_activity" />
     <item
         android:id="@+id/open_lsp_activity"

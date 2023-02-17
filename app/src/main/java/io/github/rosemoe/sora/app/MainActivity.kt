@@ -531,7 +531,7 @@ class MainActivity : AppCompatActivity() {
         val id = item.itemId
         val editor = binding.editor
         when (id) {
-            R.id.open_test_activity -> startActivity(Intent(this, TestActivity::class.java))
+            //R.id.open_test_activity -> startActivity(Intent(this, TestActivity::class.java))
             R.id.open_lsp_activity -> {
                 if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) {
                     AlertDialog.Builder(this)
