@@ -33,6 +33,7 @@ import io.github.rosemoe.sora.lang.completion.snippet.CodeSnippet
 import io.github.rosemoe.sora.lang.completion.snippet.InterpolatedShellItem
 import io.github.rosemoe.sora.lang.completion.snippet.PlaceholderDefinition
 import io.github.rosemoe.sora.lang.completion.snippet.PlaceholderItem
+import io.github.rosemoe.sora.lang.completion.snippet.PlainPlaceholderElement
 import io.github.rosemoe.sora.lang.completion.snippet.PlainTextItem
 import io.github.rosemoe.sora.lang.completion.snippet.SnippetItem
 import io.github.rosemoe.sora.lang.completion.snippet.VariableItem
@@ -270,9 +271,10 @@ class SnippetController(private val editor: CodeEditor) {
                     val def = if (variableItemMapping.contains(item.name)) {
                         variableItemMapping[item.name]!!
                     } else {
-                        variableItemMapping[item.name] =
-                            PlaceholderDefinition(++maxTabStop, item.name)
-                        variableItemMapping[item.name]!!
+                        val definition = PlaceholderDefinition(++maxTabStop)
+                        definition.text = item.name
+                        variableItemMapping[item.name] = definition
+                        definition
                     }
                     elements[i] = PlaceholderItem(def, item.startIndex)
                     val deltaIndex = item.name.length - (item.endIndex - item.startIndex)
@@ -352,6 +354,40 @@ class SnippetController(private val editor: CodeEditor) {
                 snippetItem.text = sb.toString()
                 snippetItem.setIndex(snippetItem.startIndex, snippetItem.endIndex + deltaIndex)
                 shiftItemsFrom(i + 1, deltaIndex)
+            } else if (snippetItem is PlaceholderItem) {
+                val definition = snippetItem.definition
+                if (definition.elements.isEmpty()) {
+                    continue
+                }
+
+                val sb = StringBuilder()
+                var deltaIndex = 0
+                for (element in snippetItem.definition.elements) {
+                    if (element is PlainPlaceholderElement) {
+                        sb.append(element.text)
+                        deltaIndex += element.text.length
+                    } else if (element is VariableItem) {
+                        var value = when {
+                            variableResolver.canResolve(element.name) -> variableResolver.resolve(element.name)
+                            element.name == "selection" -> selectedText
+                            element.defaultValue != null -> element.defaultValue
+                            else -> null
+                        }
+
+                        if (value != null) {
+                            value = TransformApplier.doTransform(value, element.transform)
+                            sb.append(value)
+                            deltaIndex += value.length
+                        } else {
+                            sb.append(element.name)
+                            deltaIndex += element.name.length
+                        }
+                    }
+                }
+
+                definition.text = sb.toString()
+                snippetItem.setIndex(snippetItem.startIndex, snippetItem.endIndex + deltaIndex)
+                shiftItemsFrom(i + 1, deltaIndex)
             }
         }
         // Stage 5: collect tab stops and placeholders
@@ -370,7 +406,7 @@ class SnippetController(private val editor: CodeEditor) {
             clonedSnippet.items.find { it is PlaceholderItem && it.definition.id == 0 } as PlaceholderItem?
         if (end == null) {
             end = PlaceholderItem(
-                PlaceholderDefinition(0, ""), elements.last().endIndex
+                PlaceholderDefinition(0), elements.last().endIndex
             )
             clonedSnippet.items.add(end)
         }
@@ -382,7 +418,10 @@ class SnippetController(private val editor: CodeEditor) {
             if (it is PlainTextItem) {
                 sb.append(it.text)
             } else if (it is PlaceholderItem) {
-                sb.append(it.definition.defaultValue)
+                val definition = it.definition
+                if (!definition.text.isNullOrEmpty()) {
+                    sb.append(definition.text)
+                }
             }
         }
         text.insert(pos.line, pos.column, sb)
@@ -432,7 +471,7 @@ class SnippetController(private val editor: CodeEditor) {
     fun getInactiveTabStops(): List<SnippetItem> {
         val editing = getEditingTabStop()
         if (editing != null) {
-            currentSnippet!!.items!!.filter { (it is PlaceholderItem && it.definition != editing.definition) }
+            return currentSnippet!!.items!!.filter { (it is PlaceholderItem && it.definition != editing.definition) }
         }
         return emptyList()
     }

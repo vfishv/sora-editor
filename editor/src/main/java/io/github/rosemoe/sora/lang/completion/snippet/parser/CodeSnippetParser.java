@@ -24,19 +24,21 @@
 package io.github.rosemoe.sora.lang.completion.snippet.parser;
 
 import androidx.annotation.NonNull;
-
-import java.util.ArrayList;
-import java.util.List;
-import java.util.regex.Pattern;
-import java.util.regex.PatternSyntaxException;
-
+import androidx.annotation.Nullable;
 import io.github.rosemoe.sora.lang.completion.snippet.CodeSnippet;
 import io.github.rosemoe.sora.lang.completion.snippet.ConditionalFormat;
 import io.github.rosemoe.sora.lang.completion.snippet.FormatString;
 import io.github.rosemoe.sora.lang.completion.snippet.NextUpperCaseFormat;
 import io.github.rosemoe.sora.lang.completion.snippet.NoFormat;
+import io.github.rosemoe.sora.lang.completion.snippet.PlaceHolderElement;
 import io.github.rosemoe.sora.lang.completion.snippet.PlaceholderDefinition;
+import io.github.rosemoe.sora.lang.completion.snippet.PlainPlaceholderElement;
 import io.github.rosemoe.sora.lang.completion.snippet.Transform;
+import io.github.rosemoe.sora.lang.completion.snippet.VariableItem;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.regex.Pattern;
+import java.util.regex.PatternSyntaxException;
 
 public class CodeSnippetParser {
 
@@ -178,6 +180,15 @@ public class CodeSnippetParser {
     }
 
     private boolean parseComplexVariable() {
+        final var variable = _parseComplexVariable();
+        if (variable != null) {
+            builder.addVariable(variable);
+        }
+        return variable != null;
+    }
+
+    @Nullable
+    private VariableItem _parseComplexVariable() {
         var backup = token;
         String text;
         if (accept(TokenType.Dollar) && accept(TokenType.CurlyOpen) && (text = _accept(TokenType.VariableName)) != null) {
@@ -195,34 +206,32 @@ public class CodeSnippetParser {
                         }
                     } else if (token.type == TokenType.EOF) {
                         backTo(backup);
-                        return false;
+                        return null;
                     } else {
                         sb.append(src, token.index, token.index + token.length);
                         next();
                     }
                 }
-                builder.addVariable(variableName, sb.toString());
+                return new VariableItem(-1, variableName, sb.toString());
             } else if (accept(TokenType.Forwardslash)) {
                 // ${name/regexp/format/options}
                 var transform = new Transform();
                 if (parseTransform(transform)) {
-                    builder.addVariable(variableName, transform);
-                    return true;
+                    return new VariableItem(-1, variableName, null, transform);
                 }
                 backTo(backup);
-                return false;
+                return null;
             } else if (accept(TokenType.CurlyClose)) {
                 // ${name}
-                builder.addVariable(variableName, (String) null);
+                return new VariableItem(-1, variableName, "");
             } else {
                 // missing token
                 backTo(backup);
-                return false;
+                return null;
             }
-            return true;
         }
         backTo(backup);
-        return false;
+        return null;
     }
 
     private boolean parseComplexPlaceholder() {
@@ -232,23 +241,41 @@ public class CodeSnippetParser {
             var idText = text;
             if (accept(TokenType.Colon)) {
                 // ${1:xxx}
-                var sb = new StringBuilder();
+                final var elements = new ArrayList<PlaceHolderElement>();
                 while (!accept(TokenType.CurlyClose)) {
                     if (accept(TokenType.Backslash)) {
+                        String t;
                         if ((text = _accept(TokenType.Backslash, TokenType.Dollar, TokenType.CurlyClose)) != null) {
-                            sb.append(text);
+                            t = text;
                         } else {
-                            sb.append('\\');
+                            t = "\\";
                         }
+
+                        appendPlaceholderElement(elements, t);
                     } else if (token.type == TokenType.EOF) {
                         backTo(backup);
                         return false;
                     } else {
-                        sb.append(src, token.index, token.index + token.length);
+                        var v = parseSimpleVariableName();
+                        if (v != null) {
+                            elements.add(new VariableItem(token.index, v, ""));
+                            continue;
+                        }
+
+                        var vi = _parseComplexVariable();
+                        if (vi != null) {
+                            vi.setIndex(token.index);
+                            elements.add(vi);
+                            continue;
+                        }
+
+                        var t = src.substring(token.index, token.index + token.length);
+                        appendPlaceholderElement(elements, t);
                         next();
                     }
                 }
-                builder.addPlaceholder(Integer.parseInt(idText), sb.toString());
+                final var id = Integer.parseInt(idText);
+                builder.addComplexPlaceholder(id, elements);
             } else if (accept(TokenType.Pipe)) {
                 // ${1|one,two,three|}
                 var choices = new ArrayList<String>();
@@ -287,6 +314,32 @@ public class CodeSnippetParser {
         }
         backTo(backup);
         return false;
+    }
+
+    private static void appendPlaceholderElement(@NonNull ArrayList<PlaceHolderElement> elements, @NonNull String t) {
+        if (!elements.isEmpty()) {
+            if (elements.get(elements.size() - 1) instanceof PlainPlaceholderElement) {
+                // merge with the last plain placeholder element
+                var plain = (PlainPlaceholderElement) elements.get(elements.size() - 1);
+                plain.setText(plain.getText() + t);
+                return;
+            }
+        }
+        elements.add(new PlainPlaceholderElement(t));
+    }
+
+    @Nullable
+    private String parseSimpleVariableName() {
+        var backup = token;
+        if (accept(TokenType.Dollar)) {
+            // Check for : $VARIABLE_NAME
+            var v = _accept(TokenType.VariableName);
+            if (v != null) {
+                return v;
+            }
+        }
+        backTo(backup);
+        return null;
     }
 
     private boolean parseChoiceElement(List<String> choices) {

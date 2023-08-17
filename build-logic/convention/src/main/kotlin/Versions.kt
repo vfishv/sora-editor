@@ -24,13 +24,19 @@
 @SuppressWarnings("unused")
 object Versions {
     // Project versions
-    const val versionName = "0.21.0"
-    const val versionCode = 76
+    private const val version = "0.22.0"
+    const val versionCode = 78
+
+    val versionName by lazy {
+        if (CI.isCiBuild) {
+            "$version-${CI.commitHash}-SNAPSHOT"
+        } else version
+    }
 
     // Platform & Tool versions
-    const val buildToolsVersion = "33.0.2"
-    const val compileSdkVersion = 33
+    const val buildToolsVersion = "34.0.0"
+    const val compileSdkVersion = 34
     const val minSdkVersion = 21
     const val minSdkVersionHighApi = 26
-    const val targetSdkVersion = 33
+    const val targetSdkVersion = 34
 }
