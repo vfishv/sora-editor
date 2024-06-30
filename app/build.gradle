@@ -25,8 +25,9 @@
 apply plugin: 'com.android.application'
 
 android {
-    compileSdkVersion Versions.compileSdkVersion
-    buildToolsVersion Versions.buildToolsVersion
+    compileSdk Versions.compileSdkVersion
+    //buildToolsVersion Versions.buildToolsVersion
+    namespace 'io.github.rosemoe.sora.app'
     defaultConfig {
         applicationId 'io.github.rosemoe.sora.app'
         minSdkVersion Versions.minSdkVersion
@@ -58,9 +59,9 @@ android {
 }
 
 dependencies {
-    coreLibraryDesugaring 'com.android.tools:desugar_jdk_libs:1.2.2'
-    implementation "org.jetbrains.kotlin:kotlin-stdlib-jdk8:1.8.0"
-    implementation 'androidx.annotation:annotation:1.6.0'
+    coreLibraryDesugaring 'com.android.tools:desugar_jdk_libs:2.0.4'
+    implementation "org.jetbrains.kotlin:kotlin-stdlib-jdk8:1.9.23"
+    implementation 'androidx.annotation:annotation:1.8.0'
     implementation 'com.google.android.material:material:1.12.0'
 //    implementation fileTree(dir: 'libs', include: ['*.jar'])
     implementation 'androidx.appcompat:appcompat:1.7.0'

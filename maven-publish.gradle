@@ -26,7 +26,8 @@ apply plugin: 'maven-publish'
 apply plugin: 'signing'
 
 task androidSourcesJar(type: Jar) {
-    classifier = 'sources'
+    //classifier = 'sources'
+    archiveClassifier = 'sources'  // Use archiveClassifier instead of classifier
     from android.sourceSets.main.java.source
 }
 
