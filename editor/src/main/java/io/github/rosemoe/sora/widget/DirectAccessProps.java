@@ -1,7 +1,7 @@
 /*
  *    sora-editor - the awesome code editor for Android
  *    https://github.com/Rosemoe/sora-editor
- *    Copyright (C) 2020-2023  Rosemoe
+ *    Copyright (C) 2020-2024  Rosemoe
  *
  *     This library is free software; you can redistribute it and/or
  *     modify it under the terms of the GNU Lesser General Public
@@ -350,7 +350,7 @@ public class DirectAccessProps implements Serializable {
      */
     @IntRange(from = 1)
     @InvalidateRequired
-    public int stickyScrollMaxLines = 4;
+    public int stickyScrollMaxLines = 3;
 
     /**
      * Prefer inner scopes if true.
@@ -371,5 +371,73 @@ public class DirectAccessProps implements Serializable {
      */
     @InvalidateRequired
     public boolean stickyScrollAutoCollapse = true;
+
+    /**
+     * Fling scroll in single direction (vertical or horizontal)
+     */
+    public boolean singleDirectionFling = true;
+
+    /**
+     * Dragging scroll in single direction (vertical or horizontal)
+     */
+    public boolean singleDirectionDragging = true;
+
+    /**
+     * Report cursor anchor info to system.
+     * <p>
+     * Enable this if the IME needs to get the position of cursor on screen. For example, the
+     * IME dialog follows our insert marker (selection).
+     */
+    public boolean reportCursorAnchor = true;
+
+    /**
+     * Place selection on previous line after cutting line
+     */
+    public boolean placeSelOnPreviousLineAfterCut = false;
+
+    /**
+     * Enable mouse mode if a mouse is currently hovering in editor
+     */
+    public final static int MOUSE_MODE_AUTO = 0;
+
+    /**
+     * Always use mouse mode
+     */
+    public final static int MOUSE_MODE_ALWAYS = 1;
+
+    /**
+     * Do not use mouse mode
+     */
+    public final static int MOUSE_MODE_NEVER = 2;
+
+    /**
+     * When to enable mouse mode. This affects editor windows and selection handles.
+     *
+     * @see #MOUSE_MODE_AUTO
+     * @see #MOUSE_MODE_ALWAYS
+     * @see #MOUSE_MODE_NEVER
+     */
+    public int mouseMode = MOUSE_MODE_AUTO;
+
+    /**
+     * Try to show context menu for mouse
+     */
+    public boolean mouseContextMenu = true;
+
+    /**
+     * Always show scrollbars when the editor is in mouse mode
+     */
+    public boolean mouseModeAlwaysShowScrollbars = true;
+
+    /**
+     * Adjust scrolling speed in mouse wheel scrolling
+     */
+    public float mouseWheelScrollFactor = 1.2f;
+
+    /**
+     * Disable {@link android.view.inputmethod.InputConnection#getExtractedText(ExtractedTextRequest, int)}
+     * for IME
+     */
+    public boolean disableTextExtracting = false;
 
 }

@@ -1,7 +1,7 @@
 /*
  *    sora-editor - the awesome code editor for Android
  *    https://github.com/Rosemoe/sora-editor
- *    Copyright (C) 2020-2023  Rosemoe
+ *    Copyright (C) 2020-2024  Rosemoe
  *
  *     This library is free software; you can redistribute it and/or
  *     modify it under the terms of the GNU Lesser General Public
@@ -23,7 +23,6 @@
  */
 package io.github.rosemoe.sora.lang.analysis;
 
-import android.os.Bundle;
 import android.os.Message;
 import android.util.Log;
 
@@ -41,37 +40,34 @@ import java.util.concurrent.locks.ReentrantLock;
 
 import io.github.rosemoe.sora.lang.styling.CodeBlock;
 import io.github.rosemoe.sora.lang.styling.Span;
+import io.github.rosemoe.sora.lang.styling.SpanFactory;
 import io.github.rosemoe.sora.lang.styling.Spans;
 import io.github.rosemoe.sora.lang.styling.Styles;
+import io.github.rosemoe.sora.lang.util.BaseAnalyzeManager;
 import io.github.rosemoe.sora.text.CharPosition;
 import io.github.rosemoe.sora.text.Content;
-import io.github.rosemoe.sora.text.ContentReference;
 import io.github.rosemoe.sora.util.IntPair;
 import io.github.rosemoe.sora.widget.schemes.EditorColorScheme;
 
-public abstract class AsyncIncrementalAnalyzeManager<S, T> implements IncrementalAnalyzeManager<S, T> {
+/**
+ * Asynchronous base implementation of {@link IncrementalAnalyzeManager}
+ * <p>
+ * {@inheritDoc}
+ *
+ * @author Rosemoe
+ */
+public abstract class AsyncIncrementalAnalyzeManager<S, T> extends BaseAnalyzeManager implements IncrementalAnalyzeManager<S, T> {
 
     private final static int MSG_BASE = 11451400;
     private final static int MSG_INIT = MSG_BASE + 1;
     private final static int MSG_MOD = MSG_BASE + 2;
     private static int sThreadId = 0;
-    private StyleReceiver receiver;
-    private ContentReference ref;
-    private Bundle extraArguments;
     private LooperThread thread;
     private volatile long runCount;
 
     private synchronized static int nextThreadId() {
         sThreadId++;
         return sThreadId;
-    }
-
-    /**
-     * Get receiver
-     */
-    @Nullable
-    protected StyleReceiver getReceiver() {
-        return receiver;
     }
 
     /**
@@ -82,18 +78,6 @@ public abstract class AsyncIncrementalAnalyzeManager<S, T> implements Incrementa
         if (r != null) {
             consumer.accept(r);
         }
-    }
-
-    @Override
-    public void setReceiver(StyleReceiver receiver) {
-        this.receiver = receiver;
-    }
-
-    @Override
-    public void reset(@NonNull ContentReference content, @NonNull Bundle extraArguments) {
-        this.ref = content;
-        this.extraArguments = extraArguments;
-        rerun();
     }
 
     @Override
@@ -119,15 +103,19 @@ public abstract class AsyncIncrementalAnalyzeManager<S, T> implements Incrementa
                 thread.interrupt();
                 thread.abort = true;
             }
+            thread = null;
         }
-        final var text = ref.getReference().copyText(false);
-        text.setUndoEnabled(false);
-        thread = new LooperThread();
-        thread.setName("AsyncAnalyzer-" + nextThreadId());
-        thread.offerMessage(MSG_INIT, text);
-        increaseRunCount();
-        sendNewStyles(null);
-        thread.start();
+        var ref = getContentRef();
+        if (ref != null) {
+            final var text = ref.getReference().copyText(false);
+            text.setUndoEnabled(false);
+            thread = new LooperThread();
+            thread.setName("AsyncAnalyzer-" + nextThreadId());
+            thread.offerMessage(MSG_INIT, text);
+            increaseRunCount();
+            sendNewStyles(null);
+            thread.start();
+        }
     }
 
     @Override
@@ -164,21 +152,19 @@ public abstract class AsyncIncrementalAnalyzeManager<S, T> implements Incrementa
             }
             thread.abort = true;
         }
-        receiver = null;
-        ref = null;
-        extraArguments = null;
         thread = null;
+        super.destroy();
     }
 
     private void sendNewStyles(Styles styles) {
-        final var r = receiver;
+        final var r = getReceiver();
         if (r != null) {
             r.setStyles(this, styles);
         }
     }
 
     private void sendUpdate(Styles styles, int startLine, int endLine) {
-        final var r = receiver;
+        final var r = getReceiver();
         if (r != null) {
             r.updateStyles(this, styles, new SequenceUpdateRange(startLine, endLine));
         }
@@ -191,10 +177,6 @@ public abstract class AsyncIncrementalAnalyzeManager<S, T> implements Incrementa
      */
     public abstract List<CodeBlock> computeBlocks(Content text, CodeBlockAnalyzeDelegate delegate);
 
-    public Bundle getExtraArguments() {
-        return extraArguments;
-    }
-
     public Styles getManagedStyles() {
         var thread = Thread.currentThread();
         if (thread.getClass() != AsyncIncrementalAnalyzeManager.LooperThread.class) {
@@ -204,6 +186,8 @@ public abstract class AsyncIncrementalAnalyzeManager<S, T> implements Incrementa
     }
 
     private static class LockedSpans implements Spans {
+
+        private static final String LOG_TAG = "LockedSpans";
 
         private final Lock lock;
         private final List<Line> lines;
@@ -249,10 +233,6 @@ public abstract class AsyncIncrementalAnalyzeManager<S, T> implements Incrementa
 
             public List<Span> spans;
 
-            public Line() {
-                this(null);
-            }
-
             public Line(List<Span> s) {
                 spans = s;
             }
@@ -277,7 +257,7 @@ public abstract class AsyncIncrementalAnalyzeManager<S, T> implements Incrementa
                     try {
                         locked = lock.tryLock(100, TimeUnit.MICROSECONDS);
                     } catch (InterruptedException e) {
-                        e.printStackTrace();
+                        Log.w(LOG_TAG, "failed to acquire the lock", e);
                         Thread.currentThread().interrupt();
                     }
                     if (locked) {
@@ -304,7 +284,7 @@ public abstract class AsyncIncrementalAnalyzeManager<S, T> implements Incrementa
 
             @Override
             public Span getSpanAt(int index) {
-                return line == null ? Span.obtain(0, EditorColorScheme.TEXT_NORMAL) : line.spans.get(index);
+                return line == null ? SpanFactory.obtain(0, EditorColorScheme.TEXT_NORMAL) : line.spans.get(index);
             }
 
             @Override
@@ -314,7 +294,7 @@ public abstract class AsyncIncrementalAnalyzeManager<S, T> implements Incrementa
                 try {
                     locked = lock.tryLock(1, TimeUnit.MILLISECONDS);
                 } catch (InterruptedException e) {
-                    e.printStackTrace();
+                    Log.w(LOG_TAG, "failed to acquire the lock", e);
                 }
                 if (locked) {
                     Line obj = null;
@@ -349,7 +329,7 @@ public abstract class AsyncIncrementalAnalyzeManager<S, T> implements Incrementa
                 try {
                     while (lines.size() <= line) {
                         var list = new ArrayList<Span>();
-                        list.add(Span.obtain(0, EditorColorScheme.TEXT_NORMAL));
+                        list.add(SpanFactory.obtain(0, EditorColorScheme.TEXT_NORMAL));
                         lines.add(new Line(list));
                     }
                     var obj = lines.get(line);

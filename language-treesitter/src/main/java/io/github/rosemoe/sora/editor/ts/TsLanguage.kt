@@ -1,7 +1,7 @@
 /*******************************************************************************
  *    sora-editor - the awesome code editor for Android
  *    https://github.com/Rosemoe/sora-editor
- *    Copyright (C) 2020-2023  Rosemoe
+ *    Copyright (C) 2020-2024  Rosemoe
  *
  *     This library is free software; you can redistribute it and/or
  *     modify it under the terms of the GNU Lesser General Public
@@ -27,6 +27,7 @@ package io.github.rosemoe.sora.editor.ts
 import android.os.Bundle
 import io.github.rosemoe.sora.lang.EmptyLanguage
 import io.github.rosemoe.sora.lang.Language
+import io.github.rosemoe.sora.lang.QuickQuoteHandler
 import io.github.rosemoe.sora.lang.completion.CompletionPublisher
 import io.github.rosemoe.sora.lang.format.Formatter
 import io.github.rosemoe.sora.lang.smartEnter.NewlineHandler
@@ -58,7 +59,7 @@ open class TsLanguage(
         }
     }
 
-    private var tsTheme = TsThemeBuilder(languageSpec.tsQuery).apply { themeDescription() }.theme
+    protected var tsTheme = TsThemeBuilder(languageSpec.tsQuery).apply { themeDescription() }.theme
 
     open val analyzer by lazy {
         TsAnalyzeManager(languageSpec, tsTheme)
@@ -104,6 +105,8 @@ open class TsLanguage(
     override fun getSymbolPairs(): SymbolPairMatch = EmptyLanguage.EMPTY_SYMBOL_PAIRS
 
     override fun getNewlineHandlers() = emptyArray<NewlineHandler>()
+
+    override fun getQuickQuoteHandler() = null
 
     override fun destroy() {
         languageSpec.close()

@@ -1,7 +1,7 @@
 /*******************************************************************************
  *    sora-editor - the awesome code editor for Android
  *    https://github.com/Rosemoe/sora-editor
- *    Copyright (C) 2020-2023  Rosemoe
+ *    Copyright (C) 2020-2024  Rosemoe
  *
  *     This library is free software; you can redistribute it and/or
  *     modify it under the terms of the GNU Lesser General Public
@@ -24,6 +24,7 @@
 
 package io.github.rosemoe.sora.widget.layout
 
+import io.github.rosemoe.sora.graphics.CharPosDesc
 import io.github.rosemoe.sora.graphics.GraphicTextRow
 import io.github.rosemoe.sora.text.Content
 import io.github.rosemoe.sora.widget.CodeEditor
@@ -47,9 +48,9 @@ object BidiLayoutHelper {
             line,
             0,
             lineText.length,
-            editor.tabWidth,
             layout.getSpans(line),
-            editor.textPaint
+            editor.textPaint,
+            editor.renderContext
         )
         if (layout is WordwrapLayout) {
             gtr.setSoftBreaks(layout.getSoftBreaksForLine(line))
@@ -93,9 +94,9 @@ object BidiLayoutHelper {
             line,
             0,
             lineText.length,
-            editor.tabWidth,
             layout.getSpans(line),
-            editor.textPaint
+            editor.textPaint,
+            editor.renderContext
         )
         if (layout is WordwrapLayout) {
             gtr.setSoftBreaks(layout.getSoftBreaksForLine(line))
@@ -118,9 +119,19 @@ object BidiLayoutHelper {
             val width = gtr.measureText(runStart, runEnd)
             if (offset + width >= targetOffset) {
                 val res = if (dirs.isRunRtl(i)) {
-                    gtr.findOffsetByAdvance(runStart, offset + width - targetOffset)[0].toInt()
+                    CharPosDesc.getTextOffset(
+                        gtr.findOffsetByAdvance(
+                            runStart,
+                            offset + width - targetOffset
+                        )
+                    )
                 } else {
-                    gtr.findOffsetByAdvance(runStart, targetOffset - offset)[0].toInt()
+                    CharPosDesc.getTextOffset(
+                        gtr.findOffsetByAdvance(
+                            runStart,
+                            targetOffset - offset
+                        )
+                    )
                 }
                 gtr.recycle()
                 return res

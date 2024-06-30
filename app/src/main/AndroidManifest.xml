@@ -2,7 +2,7 @@
 <!--~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
   ~    sora-editor - the awesome code editor for Android
   ~    https://github.com/Rosemoe/sora-editor
-  ~    Copyright (C) 2020-2023  Rosemoe
+  ~    Copyright (C) 2020-2024  Rosemoe
   ~
   ~     This library is free software; you can redistribute it and/or
   ~     modify it under the terms of the GNU Lesser General Public
@@ -49,18 +49,23 @@
             tools:targetApi="q" />
 
         <activity
-            android:name=".TestActivity"
-            android:configChanges="orientation|keyboardHidden|screenSize|uiMode"
+            android:name=".tests.TestActivity"
+            android:configChanges="orientation|keyboardHidden|screenSize|uiMode|keyboard|navigation"
             android:exported="false"
             android:windowSoftInputMode="adjustResize"/>
         <activity
             android:name=".LspTestActivity"
-            android:configChanges="orientation|keyboardHidden|screenSize|uiMode"
+            android:configChanges="orientation|keyboardHidden|screenSize|uiMode|keyboard|navigation"
+            android:exported="false"
+            android:windowSoftInputMode="adjustResize"/>
+        <activity
+            android:name=".LspTestJavaActivity"
+            android:configChanges="orientation|keyboardHidden|screenSize|uiMode|keyboard|navigation"
             android:exported="false"
             android:windowSoftInputMode="adjustResize"/>
         <activity
             android:name=".MainActivity"
-            android:configChanges="orientation|keyboardHidden|screenSize|uiMode"
+            android:configChanges="orientation|keyboardHidden|screenSize|uiMode|keyboard|navigation"
             android:exported="true"
             android:windowSoftInputMode="adjustResize">
             <intent-filter>

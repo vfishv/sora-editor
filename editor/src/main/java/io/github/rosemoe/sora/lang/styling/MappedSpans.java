@@ -1,7 +1,7 @@
 /*
  *    sora-editor - the awesome code editor for Android
  *    https://github.com/Rosemoe/sora-editor
- *    Copyright (C) 2020-2023  Rosemoe
+ *    Copyright (C) 2020-2024  Rosemoe
  *
  *     This library is free software; you can redistribute it and/or
  *     modify it under the terms of the GNU Lesser General Public
@@ -73,7 +73,7 @@ public class MappedSpans implements Spans {
 
     @Override
     public Reader read() {
-        return new Mdf();
+        return new MappedSpansAccessor();
     }
 
     @Override
@@ -83,7 +83,7 @@ public class MappedSpans implements Spans {
 
     @Override
     public Modifier modify() {
-        return new Mdf();
+        return new MappedSpansAccessor();
     }
 
     @Override
@@ -117,10 +117,10 @@ public class MappedSpans implements Spans {
          * @param style    Style of text
          */
         public void addIfNeeded(int spanLine, int column, long style) {
-            if (last != null && last.style == style) {
+            if (last != null && last.getStyle() == style) {
                 return;
             }
-            add(spanLine, Span.obtain(column, style));
+            add(spanLine, SpanFactory.obtain(column, style));
         }
 
         /**
@@ -140,16 +140,16 @@ public class MappedSpans implements Spans {
             } else if (spanLine > mapLine) {
                 Span extendedSpan = last;
                 if (extendedSpan == null) {
-                    extendedSpan = Span.obtain(0, EditorColorScheme.TEXT_NORMAL);
+                    extendedSpan = SpanFactory.obtain(0, EditorColorScheme.TEXT_NORMAL);
                 }
                 while (mapLine < spanLine) {
                     List<Span> lineSpans = new ArrayList<>();
-                    lineSpans.add(extendedSpan.copy().setColumn(0));
+                    lineSpans.add(copyAndSetColumn(extendedSpan, 0));
                     spans.add(lineSpans);
                     mapLine++;
                 }
                 List<Span> lineSpans = spans.get(spanLine);
-                if (span.column == 0) {
+                if (span.getColumn() == 0) {
                     lineSpans.clear();
                 }
                 lineSpans.add(span);
@@ -169,11 +169,11 @@ public class MappedSpans implements Spans {
             int mapLine = spans.size() - 1;
             var extendedSpan = last;
             if (extendedSpan == null) {
-                extendedSpan = Span.obtain(0, EditorColorScheme.TEXT_NORMAL);
+                extendedSpan = SpanFactory.obtain(0, EditorColorScheme.TEXT_NORMAL);
             }
             while (mapLine < line) {
                 List<Span> lineSpans = new ArrayList<>();
-                lineSpans.add(extendedSpan.copy().setColumn(0));
+                lineSpans.add(copyAndSetColumn(extendedSpan, 0));
                 spans.add(lineSpans);
                 mapLine++;
             }
@@ -185,7 +185,7 @@ public class MappedSpans implements Spans {
         public void addNormalIfNull() {
             if (spans.isEmpty()) {
                 List<Span> spanList = new ArrayList<>();
-                spanList.add(Span.obtain(0, EditorColorScheme.TEXT_NORMAL));
+                spanList.add(SpanFactory.obtain(0, EditorColorScheme.TEXT_NORMAL));
                 spans.add(spanList);
             }
         }
@@ -195,7 +195,7 @@ public class MappedSpans implements Spans {
         }
     }
 
-    private class Mdf implements Reader, Modifier {
+    private class MappedSpansAccessor implements Reader, Modifier {
 
         private List<Span> span;
 
@@ -237,7 +237,7 @@ public class MappedSpans implements Spans {
             var extend = last.get(last.size() - 1);
             while (spanMap.size() <= line) {
                 var list = new ArrayList<Span>();
-                list.add(extend.copy().setColumn(0));
+                list.add(copyAndSetColumn(extend, 0));
                 spanMap.add(list);
             }
             spanMap.set(line, spans);
@@ -252,6 +252,12 @@ public class MappedSpans implements Spans {
         public void deleteLineAt(int line) {
             spanMap.remove(line);
         }
+    }
+
+    private static Span copyAndSetColumn(Span s, int column) {
+        var span = s.copy();
+        span.setColumn(column);
+        return span;
     }
 
 }

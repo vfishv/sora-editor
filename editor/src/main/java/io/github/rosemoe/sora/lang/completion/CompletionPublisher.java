@@ -1,7 +1,7 @@
 /*
  *    sora-editor - the awesome code editor for Android
  *    https://github.com/Rosemoe/sora-editor
- *    Copyright (C) 2020-2023  Rosemoe
+ *    Copyright (C) 2020-2024  Rosemoe
  *
  *     This library is free software; you can redistribute it and/or
  *     modify it under the terms of the GNU Lesser General Public
@@ -123,7 +123,7 @@ public class CompletionPublisher {
             return;
         }
         this.comparator = comparator;
-        if (items.size() != 0 && comparator != null) {
+        if (!items.isEmpty() && comparator != null) {
             handler.post(() -> {
                 if (invalid) {
                     return;
@@ -217,7 +217,7 @@ public class CompletionPublisher {
 
             if (locked) {
                 try {
-                    if (candidates.size() == 0) {
+                    if (candidates.isEmpty()) {
                         callback.run();
                         return;
                     }

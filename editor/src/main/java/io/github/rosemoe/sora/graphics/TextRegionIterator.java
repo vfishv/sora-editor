@@ -1,7 +1,7 @@
 /*
  *    sora-editor - the awesome code editor for Android
  *    https://github.com/Rosemoe/sora-editor
- *    Copyright (C) 2020-2023  Rosemoe
+ *    Copyright (C) 2020-2024  Rosemoe
  *
  *     This library is free software; you can redistribute it and/or
  *     modify it under the terms of the GNU Lesser General Public
@@ -29,6 +29,7 @@ import androidx.annotation.Nullable;
 import java.util.List;
 
 import io.github.rosemoe.sora.lang.styling.Span;
+import io.github.rosemoe.sora.lang.styling.SpanFactory;
 import io.github.rosemoe.sora.util.RegionIterator;
 import io.github.rosemoe.sora.widget.schemes.EditorColorScheme;
 
@@ -69,7 +70,7 @@ class TextRegionIterator extends RegionIterator {
     public Span getSpan() {
         var idx = getRegionSourcePointer(0) - 1;
         if (idx < 0) {
-            return Span.obtain(0, EditorColorScheme.TEXT_NORMAL);
+            return SpanFactory.obtain(0, EditorColorScheme.TEXT_NORMAL);
         }
         return spans.get(idx);
     }
@@ -103,7 +104,7 @@ class TextRegionIterator extends RegionIterator {
 
         @Override
         public int getPointAt(int index) {
-            return spans.get(index).column;
+            return spans.get(index).getColumn();
         }
 
     }

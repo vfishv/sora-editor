@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?><!--~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
   ~    sora-editor - the awesome code editor for Android
   ~    https://github.com/Rosemoe/sora-editor
-  ~    Copyright (C) 2020-2023  Rosemoe
+  ~    Copyright (C) 2020-2024  Rosemoe
   ~
   ~     This library is free software; you can redistribute it and/or
   ~     modify it under the terms of the GNU Lesser General Public
@@ -90,6 +90,16 @@
                 android:checkable="true"
                 android:checked="true"
                 android:title="@string/open_completion_window_animation" />
+            <item
+                android:id="@+id/softKbdEnabled"
+                android:checkable="true"
+                android:checked="true"
+                android:title="@string/enable_soft_keyboard" />
+            <item
+                android:id="@+id/disableSoftKbdOnHardKbd"
+                android:checkable="true"
+                android:checked="true"
+                android:title="@string/hide_soft_kbd_if_hard_kbd_available" />
         </menu>
     </item>
     <item android:title="@string/line_info_panel_position">
@@ -114,12 +124,14 @@
                 android:id="@+id/clear_logs"
                 android:title="@string/clear_crash_log" />
             <item
-                android:id="@+id/open_debug_logs"
-                android:title="@string/open_debug_logs"
-                android:visible="false" />
-            <item
                 android:id="@+id/load_test_file"
                 android:title="@string/open_debug_document"/>
+            <item
+                android:id="@+id/open_test_activity"
+                android:title="@string/open_new_activity" />
+            <item
+                android:id="@+id/open_lsp_activity"
+                android:title="@string/open_lsp_activity" />
         </menu>
     </item>
 
@@ -130,12 +142,6 @@
         android:id="@+id/switch_colors"
         android:title="@string/switch_color_scheme" />
 
-    <item
-        android:id="@+id/open_test_activity"
-        android:title="@string/open_new_activity" />
-    <item
-        android:id="@+id/open_lsp_activity"
-        android:title="@string/open_lsp_activity" />
     <item
         android:id="@+id/text_undo"
         android:icon="@drawable/undo"

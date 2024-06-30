@@ -1,7 +1,7 @@
 /*
  *    sora-editor - the awesome code editor for Android
  *    https://github.com/Rosemoe/sora-editor
- *    Copyright (C) 2020-2023  Rosemoe
+ *    Copyright (C) 2020-2024  Rosemoe
  *
  *     This library is free software; you can redistribute it and/or
  *     modify it under the terms of the GNU Lesser General Public
@@ -74,11 +74,6 @@ public abstract class AbstractLayout implements Layout {
     @Override
     public void afterInsert(@NonNull Content content, int startLine, int startColumn, int endLine, int endColumn, @NonNull CharSequence insertedContent) {
 
-    }
-
-    @Override
-    public void onRemove(@NonNull Content content, @NonNull ContentLine line) {
-        // do nothing
     }
 
     @Override

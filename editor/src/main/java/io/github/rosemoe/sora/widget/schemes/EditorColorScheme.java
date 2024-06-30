@@ -1,7 +1,7 @@
 /*
  *    sora-editor - the awesome code editor for Android
  *    https://github.com/Rosemoe/sora-editor
- *    Copyright (C) 2020-2023  Rosemoe
+ *    Copyright (C) 2020-2024  Rosemoe
  *
  *     This library is free software; you can redistribute it and/or
  *     modify it under the terms of the GNU Lesser General Public
@@ -38,7 +38,9 @@ import io.github.rosemoe.sora.widget.CodeEditor;
 
 /**
  * This class manages the colors of editor.
- * You can use color ids that are not in pre-defined id pool due to new languages.
+ * You can use color IDs that are not in pre-defined id pool for custom languages. We recommend
+ *  adding a base offset for your custom color IDs. For example, first custom color ID is 256. This
+ *   leaves enough space for editor's future built-in colors.
  * <p>
  * This is also the default color scheme of editor.
  * Be careful to change this class, because this can cause its
@@ -51,7 +53,7 @@ import io.github.rosemoe.sora.widget.CodeEditor;
  * <p>
  * However, we also accept you to extend this class to customize
  * your own ColorScheme to use different default colors.
- * Subclasses is expected to override {@link #applyDefault()}
+ * Subclasses are expected to override {@link #applyDefault()}
  * to define colors, though other methods are not final.
  * After overriding this method, you will have to call super class's
  * applyDefault() and then a series of {@link #setColor(int, int)} calls
@@ -91,6 +93,10 @@ public class EditorColorScheme {
      * Color for text strikethrough. If value is 0, text color of that region will be used.
      */
     public static final int STRIKETHROUGH = 57;
+    /**
+     * Alias for {@link #STRIKETHROUGH}
+     */
+    public static final int STRIKE_THROUGH = STRIKETHROUGH;
     public static final int DIAGNOSTIC_TOOLTIP_ACTION = 56;
     public static final int DIAGNOSTIC_TOOLTIP_DETAILED_MSG = 55;
     public static final int DIAGNOSTIC_TOOLTIP_BRIEF_MSG = 54;
@@ -151,12 +157,15 @@ public class EditorColorScheme {
     public static final int SIGNATURE_TEXT_NORMAL = 58;
     public static final int SIGNATURE_TEXT_HIGHLIGHTED_PARAMETER = 59;
 
+    public static final int STATIC_SPAN_BACKGROUND = 63;
+    public static final int STATIC_SPAN_FOREGROUND = 64;
+
     public static final int SIGNATURE_BACKGROUND = 60;
 
     /**
      * Max pre-defined color id
      */
-    protected static final int END_COLOR_ID = 62;
+    protected static final int END_COLOR_ID = 64;
 
 
     /**
@@ -262,6 +271,7 @@ public class EditorColorScheme {
             case LINE_DIVIDER:
                 color = 0xeeeeeeee;
                 break;
+            case STATIC_SPAN_BACKGROUND:
             case WHOLE_BACKGROUND:
             case LINE_NUMBER_PANEL_TEXT:
             case COMPLETION_WND_BACKGROUND:
@@ -271,6 +281,7 @@ public class EditorColorScheme {
             case OPERATOR:
                 color = 0xFF0066D6;
                 break;
+            case STATIC_SPAN_FOREGROUND:
             case TEXT_NORMAL:
                 color = 0xFF333333;
                 break;

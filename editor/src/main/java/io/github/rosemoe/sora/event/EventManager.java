@@ -1,7 +1,7 @@
 /*
  *    sora-editor - the awesome code editor for Android
  *    https://github.com/Rosemoe/sora-editor
- *    Copyright (C) 2020-2023  Rosemoe
+ *    Copyright (C) 2020-2024  Rosemoe
  *
  *     This library is free software; you can redistribute it and/or
  *     modify it under the terms of the GNU Lesser General Public
@@ -168,6 +168,22 @@ public final class EventManager {
     }
 
     /**
+     * @see #subscribeEvent(Class, EventReceiver)
+     */
+    @NonNull
+    public <T extends Event> SubscriptionReceipt<T> subscribe(@NonNull Class<T> eventType, @NonNull EventReceiver<T> receiver) {
+        return subscribeEvent(eventType, receiver);
+    }
+
+    /**
+     * Subscribe a event and never unsubscribe from event receiver
+     */
+    @NonNull
+    public <T extends Event> SubscriptionReceipt<T> subscribeAlways(@NonNull Class<T> eventType, @NonNull NoUnsubscribeReceiver<T> receiver) {
+        return subscribeEvent(eventType, ((event, unsubscribe) -> receiver.onEvent(event)));
+    }
+
+    /**
      * Register a receiver of the given event.
      *
      * @param eventType Event type to be received
@@ -299,6 +315,12 @@ public final class EventManager {
         ReadWriteLock lock = new ReentrantReadWriteLock();
 
         List<EventReceiver<T>> receivers = new ArrayList<>();
+
+    }
+
+    public interface NoUnsubscribeReceiver<T extends Event> {
+
+        void onEvent(T event);
 
     }
 

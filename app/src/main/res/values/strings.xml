@@ -1,7 +1,7 @@
 <!--~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
   ~    sora-editor - the awesome code editor for Android
   ~    https://github.com/Rosemoe/sora-editor
-  ~    Copyright (C) 2020-2023  Rosemoe
+  ~    Copyright (C) 2020-2024  Rosemoe
   ~
   ~     This library is free software; you can redistribute it and/or
   ~     modify it under the terms of the GNU Lesser General Public
@@ -25,10 +25,10 @@
 <resources xmlns:tools="http://schemas.android.com/tools">
     <string name="app_name">Sora-editor Demo</string>
     <string name="open_debug_logs">Open Debug Logs</string>
-    <string name="layout_tv_last">Last</string>
+    <string name="layout_tv_prev">Prev</string>
     <string name="layout_tv_next">Next</string>
-    <string name="layout_tv_replace">Replace</string>
-    <string name="layout_tv_replaceAll">Replace All</string>
+    <string name="layout_tv_replace">Rep</string>
+    <string name="layout_tv_replaceAll">All</string>
     <string name="text_to_search">Text to search</string>
     <string name="replacement">Replacement</string>
     <string name="cursor_actions">Cursor Actions</string>
@@ -84,4 +84,12 @@
     <string name="search_option_regex">Regex</string>
     <string name="search_option_whole_word">Whole Word</string>
     <string name="search_option_match_case">Match Case</string>
+    <string name="enable_soft_keyboard">Enable soft keyboard</string>
+    <string name="hide_soft_kbd_if_hard_kbd_available">Hide soft kbd if hard kbd available</string>
+    <string name="deleting_log_success">Log removed.</string>
+    <string name="tip_side_icon">Side icon clicked.</string>
+    <string name="dialog_lsp_entry_title">Select LSP Activity</string>
+    <string name="dialog_lsp_entry_msg">Do you want to open LspActivity written in Kotlin?</string>
+    <string name="choice_yes">Yes</string>
+    <string name="choice_no">No</string>
 </resources>

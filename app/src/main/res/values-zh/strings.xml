@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?><!--~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
   ~    sora-editor - the awesome code editor for Android
   ~    https://github.com/Rosemoe/sora-editor
-  ~    Copyright (C) 2020-2023  Rosemoe
+  ~    Copyright (C) 2020-2024  Rosemoe
   ~
   ~     This library is free software; you can redistribute it and/or
   ~     modify it under the terms of the GNU Lesser General Public
@@ -24,7 +24,7 @@
 
 <resources>
     <string name="open_debug_logs">打开调试日志</string>
-    <string name="layout_tv_last">上个</string>
+    <string name="layout_tv_prev">上个</string>
     <string name="layout_tv_next">下个</string>
     <string name="layout_tv_replace">替换</string>
     <string name="layout_tv_replaceAll">全部</string>
@@ -84,4 +84,12 @@
     <string name="search_option_regex">正则表达式</string>
     <string name="search_option_whole_word">全词匹配</string>
     <string name="search_option_match_case">区分大小写</string>
+    <string name="enable_soft_keyboard">启用软键盘</string>
+    <string name="hide_soft_kbd_if_hard_kbd_available">物理键盘连接时隐藏软键盘</string>
+    <string name="deleting_log_success">日志已删除。</string>
+    <string name="tip_side_icon">点击了侧边按钮</string>
+    <string name="dialog_lsp_entry_title">选择LSP活动</string>
+    <string name="dialog_lsp_entry_msg">是否要打开以Kotlin编写的LSP界面？</string>
+    <string name="choice_yes">是</string>
+    <string name="choice_no">否</string>
 </resources>

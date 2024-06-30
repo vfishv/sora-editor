@@ -1,7 +1,7 @@
 /*******************************************************************************
  *    sora-editor - the awesome code editor for Android
  *    https://github.com/Rosemoe/sora-editor
- *    Copyright (C) 2020-2023  Rosemoe
+ *    Copyright (C) 2020-2024  Rosemoe
  *
  *     This library is free software; you can redistribute it and/or
  *     modify it under the terms of the GNU Lesser General Public
@@ -34,39 +34,36 @@ import com.itsaky.androidide.treesitter.TSTree
 import com.itsaky.androidide.treesitter.string.UTF16String
 import com.itsaky.androidide.treesitter.string.UTF16StringFactory
 import io.github.rosemoe.sora.data.ObjectAllocator
+import io.github.rosemoe.sora.editor.ts.spans.DefaultSpanFactory
+import io.github.rosemoe.sora.editor.ts.spans.TsSpanFactory
 import io.github.rosemoe.sora.lang.analysis.AnalyzeManager
 import io.github.rosemoe.sora.lang.analysis.StyleReceiver
 import io.github.rosemoe.sora.lang.styling.CodeBlock
 import io.github.rosemoe.sora.lang.styling.Styles
+import io.github.rosemoe.sora.lang.util.BaseAnalyzeManager
 import io.github.rosemoe.sora.text.CharPosition
 import io.github.rosemoe.sora.text.ContentReference
-import java.util.Collections
 import java.util.concurrent.LinkedBlockingQueue
 
 open class TsAnalyzeManager(val languageSpec: TsLanguageSpec, var theme: TsTheme) :
-    AnalyzeManager {
+    BaseAnalyzeManager() {
 
-    var currentReceiver: StyleReceiver? = null
-    var reference: ContentReference? = null
-    var extraArguments: Bundle? = null
+    val currentReceiver: StyleReceiver?
+        get() = receiver
+    val reference: ContentReference?
+        get() = contentRef
     var thread: TsLooperThread? = null
-    var styles = Styles()
+    var spanFactory : TsSpanFactory = DefaultSpanFactory()
+
+    open var styles = Styles()
 
     fun updateTheme(theme: TsTheme) {
         this.theme = theme
-        (styles.spans as LineSpansGenerator?)?.let {
-            it.theme = theme
+        val spans = styles.spans
+        spans?.let {
+            if (it is LineSpansGenerator)
+                it.theme = theme
         }
-    }
-
-    override fun setReceiver(receiver: StyleReceiver?) {
-        currentReceiver = receiver
-    }
-
-    override fun reset(content: ContentReference, extraArguments: Bundle) {
-        reference = content
-        this.extraArguments = extraArguments
-        rerun()
     }
 
     override fun insert(start: CharPosition, end: CharPosition, insertedContent: CharSequence) {
@@ -75,29 +72,15 @@ open class TsAnalyzeManager(val languageSpec: TsLanguageSpec, var theme: TsTheme
             TextModification(
                 start.index,
                 end.index,
-                TSInputEdit(
-                    start.index * 2,
-                    start.index * 2,
-                    end.index * 2,
-                    start.toTSPoint(),
-                    start.toTSPoint(),
-                    end.toTSPoint()
-                ),
+                newTSInputEdit(start, start, end),
                 insertedContent.toString()
             )
         )
         (styles.spans as LineSpansGenerator?)?.apply {
             lineCount = reference!!.lineCount
-            tree.edit(
-                TSInputEdit(
-                    start.index * 2,
-                    start.index * 2,
-                    end.index * 2,
-                    start.toTSPoint(),
-                    start.toTSPoint(),
-                    end.toTSPoint()
-                )
-            )
+            safeTree.accessTreeIfAvailable {
+                it.edit(newTSInputEdit(start, start, end))
+            }
         }
     }
 
@@ -107,58 +90,51 @@ open class TsAnalyzeManager(val languageSpec: TsLanguageSpec, var theme: TsTheme
             TextModification(
                 start.index,
                 end.index,
-                TSInputEdit(
-                    start.index * 2,
-                    end.index * 2,
-                    start.index * 2,
-                    start.toTSPoint(),
-                    end.toTSPoint(),
-                    start.toTSPoint()
-                ),
+                newTSInputEdit(start, end, start),
                 null
             )
         )
         (styles.spans as LineSpansGenerator?)?.apply {
             lineCount = reference!!.lineCount
-            tree.edit(
-                TSInputEdit(
-                    start.index * 2,
-                    end.index * 2,
-                    start.index * 2,
-                    start.toTSPoint(),
-                    end.toTSPoint(),
-                    start.toTSPoint()
-                )
-            )
+            safeTree.accessTreeIfAvailable {
+                it.edit(newTSInputEdit(start, end, start))
+            }
         }
     }
 
     override fun rerun() {
-        thread?.let {
-            if (it.isAlive) {
-                it.interrupt()
-                it.abort = true
-            }
-        }
-        (styles.spans as LineSpansGenerator?)?.tree?.close()
-        styles.spans = null
+        destroyPreviousRes()
+        styles = Styles()
         val initText = reference?.reference?.toString() ?: ""
         thread = TsLooperThread().also {
             it.name = "TsDaemon-${nextThreadId()}"
-            styles = Styles()
             it.offerMessage(MSG_INIT, initText)
             it.start()
         }
     }
 
     override fun destroy() {
+        destroyPreviousRes()
+        spanFactory.close()
+        super.destroy()
+    }
+
+    /**
+     * Destroy resources related to previous worker thread, and reset spans.
+     */
+    protected fun destroyPreviousRes() {
         thread?.let {
             if (it.isAlive) {
                 it.interrupt()
                 it.abort = true
             }
         }
-        (styles.spans as LineSpansGenerator?)?.tree?.close()
+        val spans = styles.spans
+        // IMPORTANT avoid access to the tree after destruction
+        styles.spans = null
+        if (spans is LineSpansGenerator) {
+            spans.safeTree.close()
+        }
     }
 
     companion object {
@@ -180,7 +156,7 @@ open class TsAnalyzeManager(val languageSpec: TsLanguageSpec, var theme: TsTheme
         @Volatile
         var abort: Boolean = false
         val localText: UTF16String = UTF16StringFactory.newString()
-        private val parser = TSParser().also {
+        private val parser = TSParser.create().also {
             it.language = languageSpec.language
         }
         var tree: TSTree? = null
@@ -200,27 +176,28 @@ open class TsAnalyzeManager(val languageSpec: TsLanguageSpec, var theme: TsTheme
         fun updateStyles() {
             val scopedVariables = TsScopedVariables(tree!!, localText, languageSpec)
             if (thread == this && messageQueue.isEmpty()) {
-                val oldTree = (styles.spans as LineSpansGenerator?)?.tree
-                val copied = tree!!.copy()
+                val oldTree = (styles.spans as LineSpansGenerator?)?.safeTree
+                val newTree = SafeTsTree(tree!!.copy())
                 styles.spans = LineSpansGenerator(
-                    copied,
+                    newTree,
                     reference!!.lineCount,
                     reference!!.reference,
                     theme,
                     languageSpec,
-                    scopedVariables
+                    scopedVariables,
+                    spanFactory
                 )
                 val oldBlocks = styles.blocks
                 updateCodeBlocks()
-                if (oldBlocks != null) {
-                    ObjectAllocator.recycleBlockLines(oldBlocks)
-                }
                 currentReceiver?.setStyles(this@TsAnalyzeManager, styles) {
                     oldTree?.close()
+                    if (oldBlocks != null) {
+                        ObjectAllocator.recycleBlockLines(oldBlocks)
+                    }
                 }
                 currentReceiver?.updateBracketProvider(
                     this@TsAnalyzeManager,
-                    TsBracketPairs(copied, languageSpec)
+                    TsBracketPairs(newTree, languageSpec)
                 )
             }
         }
@@ -230,7 +207,7 @@ open class TsAnalyzeManager(val languageSpec: TsLanguageSpec, var theme: TsTheme
                 return
             }
             val blocks = mutableListOf<CodeBlock>()
-            TSQueryCursor().use {
+            TSQueryCursor.create().use {
                 it.exec(languageSpec.blocksQuery, tree!!.rootNode)
                 var match = it.nextMatch()
                 while (match != null) {
@@ -268,7 +245,8 @@ open class TsAnalyzeManager(val languageSpec: TsLanguageSpec, var theme: TsTheme
                     match = it.nextMatch()
                 }
             }
-            val distinct = blocks.distinct().toMutableList()
+            // sequence should be preferred here in order to avoid allocating multiple lists and sets
+            val distinct = blocks.asSequence().distinct().toMutableList()
             styles.blocks = distinct
             styles.finishBuilding()
         }
@@ -339,7 +317,7 @@ open class TsAnalyzeManager(val languageSpec: TsLanguageSpec, var theme: TsTheme
 
     }
 
-    private data class TextModification(
+    data class TextModification(
         val start: Int,
         val end: Int,
         val tsEdition: TSInputEdit,

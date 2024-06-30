@@ -1,7 +1,7 @@
 /*
  *    sora-editor - the awesome code editor for Android
  *    https://github.com/Rosemoe/sora-editor
- *    Copyright (C) 2020-2023  Rosemoe
+ *    Copyright (C) 2020-2024  Rosemoe
  *
  *     This library is free software; you can redistribute it and/or
  *     modify it under the terms of the GNU Lesser General Public
@@ -136,7 +136,7 @@ public class CodeSnippet implements Cloneable {
         }
 
         public Builder addPlaceholder(int id, List<String> choices) {
-            if (choices.size() == 0) {
+            if (choices.isEmpty()) {
                 return addPlaceholder(id);
             } else if (choices.size() == 1) {
                 return addPlaceholder(id, choices.get(0));

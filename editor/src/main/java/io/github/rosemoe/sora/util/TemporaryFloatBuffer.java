@@ -1,7 +1,7 @@
 /*
  *    sora-editor - the awesome code editor for Android
  *    https://github.com/Rosemoe/sora-editor
- *    Copyright (C) 2020-2023  Rosemoe
+ *    Copyright (C) 2020-2024  Rosemoe
  *
  *     This library is free software; you can redistribute it and/or
  *     modify it under the terms of the GNU Lesser General Public
@@ -25,29 +25,43 @@ package io.github.rosemoe.sora.util;
 
 public class TemporaryFloatBuffer {
 
-    private static float[] sTemp = null;
+    private static final FloatArrayCache sCache = new FloatArrayCache();
 
     public static float[] obtain(int len) {
-        float[] buf;
-
-        synchronized (TemporaryFloatBuffer.class) {
-            buf = sTemp;
-            sTemp = null;
-        }
-
-        if (buf == null || buf.length < len) {
-            buf = new float[len];
-        }
-
-        return buf;
+        return sCache.obtain(len);
     }
 
     public static void recycle(float[] temp) {
-        if (temp.length > 1000) return;
+        sCache.recycle(temp);
+    }
 
-        synchronized (TemporaryFloatBuffer.class) {
-            sTemp = temp;
+    public static class FloatArrayCache {
+
+        private float[] temp = null;
+
+        public float[] obtain(int len) {
+            float[] buf;
+
+            synchronized (this) {
+                buf = temp;
+                temp = null;
+            }
+
+            if (buf == null || buf.length < len) {
+                buf = new float[len];
+            }
+
+            return buf;
         }
+
+        public void recycle(float[] temp) {
+            if (temp.length > 1000) return;
+
+            synchronized (this) {
+                this.temp = temp;
+            }
+        }
+
     }
 
 }

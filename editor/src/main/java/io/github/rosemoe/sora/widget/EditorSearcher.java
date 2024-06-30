@@ -1,7 +1,7 @@
 /*
  *    sora-editor - the awesome code editor for Android
  *    https://github.com/Rosemoe/sora-editor
- *    Copyright (C) 2020-2023  Rosemoe
+ *    Copyright (C) 2020-2024  Rosemoe
  *
  *     This library is free software; you can redistribute it and/or
  *     modify it under the terms of the GNU Lesser General Public
@@ -106,7 +106,7 @@ public class EditorSearcher {
      * @throws java.util.regex.PatternSyntaxException if pattern is invalid when regex is enabled.
      */
     public void search(@NonNull String pattern, @NonNull SearchOptions options) {
-        if (pattern.length() == 0) {
+        if (pattern.isEmpty()) {
             throw new IllegalArgumentException("pattern length must be > 0");
         }
         if (options.type == SearchOptions.TYPE_REGULAR_EXPRESSION) {
@@ -264,7 +264,7 @@ public class EditorSearcher {
     }
 
     /**
-     * Check if selected region is in search result
+     * Check if selected region is exactly a search result
      * @throws IllegalStateException if no search is in progress
      */
     public boolean isMatchedPositionSelected() {
@@ -272,17 +272,35 @@ public class EditorSearcher {
     }
 
     /**
-     * Replace currently selected region if it is in search result. Otherwise, attempt to jump to
-     * next matched position.
+     * Replace currently selected region if the region is exactly a match of searching pattern.
+     * Otherwise, attempt to jump to next matched position.
+     *
+     * @param replacement The text for replacement
+     * @throws IllegalStateException if no search is in progress
+     * @deprecated Confusing method name. Use {@link #replaceCurrentMatch(String)} instead.
+     */
+    @Deprecated(since = "0.24.0", forRemoval = true)
+    public void replaceThis(@NonNull String replacement) {
+        replaceCurrentMatch(replacement);
+    }
+
+    /**
+     * Replace currently selected region if the region is exactly a match of searching pattern.
+     * Otherwise, attempt to jump to next matched position.
+     *
      * @param replacement The text for replacement
      * @throws IllegalStateException if no search is in progress
      */
-    public void replaceThis(@NonNull String replacement) {
+    public void replaceCurrentMatch(@NonNull String replacement) {
         if (!editor.isEditable()) {
             return;
         }
         if (isMatchedPositionSelected()) {
-            editor.commitText(replacement);
+            if (replacement.isEmpty()) {
+                editor.deleteText();
+            } else {
+                editor.commitText(replacement);
+            }
         } else {
             gotoNext();
         }
@@ -360,7 +378,7 @@ public class EditorSearcher {
      */
     public static class SearchOptions {
 
-        public final boolean ignoreCase;
+        public final boolean caseInsensitive;
         @IntRange(from = 1, to = 3)
         public final int type;
         /**
@@ -376,24 +394,24 @@ public class EditorSearcher {
          */
         public final static int TYPE_REGULAR_EXPRESSION = 3;
 
-        public SearchOptions(boolean ignoreCase, boolean useRegex) {
-            this(useRegex ? TYPE_REGULAR_EXPRESSION : TYPE_NORMAL, ignoreCase);
+        public SearchOptions(boolean caseInsensitive, boolean useRegex) {
+            this(useRegex ? TYPE_REGULAR_EXPRESSION : TYPE_NORMAL, caseInsensitive);
         }
 
         /**
          * Create a new searching option with the given attributes.
          * @param type type of searching method
-         * @param ignoreCase Case insensitive
+         * @param caseInsensitive Case insensitive
          * @see #TYPE_NORMAL
          * @see #TYPE_WHOLE_WORD
          * @see #TYPE_REGULAR_EXPRESSION
          */
-        public SearchOptions(@IntRange(from = 1, to = 3) int type, boolean ignoreCase) {
+        public SearchOptions(@IntRange(from = 1, to = 3) int type, boolean caseInsensitive) {
             if (type < 1 || type > 3) {
                 throw new IllegalArgumentException("invalid type");
             }
             this.type = type;
-            this.ignoreCase = ignoreCase;
+            this.caseInsensitive = caseInsensitive;
         }
 
     }
@@ -423,7 +441,7 @@ public class EditorSearcher {
             localThread = Thread.currentThread();
             var results = new LongArrayList();
             var textLength = text.length();
-            var ignoreCase = searchOptions.ignoreCase;
+            var ignoreCase = options.caseInsensitive;
             var pattern = this.pattern;
             switch (options.type) {
                 case SearchOptions.TYPE_NORMAL: {

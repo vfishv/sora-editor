@@ -1,7 +1,7 @@
 /*
  *    sora-editor - the awesome code editor for Android
  *    https://github.com/Rosemoe/sora-editor
- *    Copyright (C) 2020-2023  Rosemoe
+ *    Copyright (C) 2020-2024  Rosemoe
  *
  *     This library is free software; you can redistribute it and/or
  *     modify it under the terms of the GNU Lesser General Public
@@ -29,22 +29,19 @@ import android.util.Pair;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 
-import org.eclipse.tm4e.languageconfiguration.model.CompleteEnterAction;
-import org.eclipse.tm4e.languageconfiguration.model.EnterAction;
-import org.eclipse.tm4e.languageconfiguration.model.LanguageConfiguration;
-import org.eclipse.tm4e.languageconfiguration.supports.IndentRulesSupport;
-import org.eclipse.tm4e.languageconfiguration.supports.OnEnterSupport;
-import org.eclipse.tm4e.languageconfiguration.utils.TabSpacesInfo;
+
+import org.eclipse.tm4e.languageconfiguration.internal.model.CompleteEnterAction;
+import org.eclipse.tm4e.languageconfiguration.internal.model.EnterAction;
+import org.eclipse.tm4e.languageconfiguration.internal.model.LanguageConfiguration;
+import org.eclipse.tm4e.languageconfiguration.internal.supports.IndentRulesSupport;
+import org.eclipse.tm4e.languageconfiguration.internal.supports.OnEnterSupport;
+import org.eclipse.tm4e.languageconfiguration.internal.utils.TextUtils;
 
 import java.util.Arrays;
-import java.util.regex.Pattern;
 
 import io.github.rosemoe.sora.lang.smartEnter.NewlineHandleResult;
 import io.github.rosemoe.sora.lang.smartEnter.NewlineHandler;
 import io.github.rosemoe.sora.lang.styling.Styles;
-
-import org.eclipse.tm4e.languageconfiguration.utils.TextUtils;
-
 import io.github.rosemoe.sora.text.CharPosition;
 import io.github.rosemoe.sora.text.Content;
 
@@ -149,7 +146,7 @@ public class TextMateNewlineHandler implements NewlineHandler {
                 return new NewlineHandleResult(typeText, caretOffset);
             }
             case Outdent:
-                final var indentation = TextUtils.getIndentationFromWhitespace(enterAction.indentation, getTabSpaces());
+                final var indentation = TextUtils.getIndentationFromWhitespace(enterAction.indentation, language.getTabSize(), language.useTab());
                 final var outdentedText = outdentString(normalizeIndentation(indentation + enterAction.appendText));
 
                 var caretOffset = outdentedText.length() + 1;
@@ -179,7 +176,6 @@ public class TextMateNewlineHandler implements NewlineHandler {
 
         var afterEnterAction = getInheritIndentForLine(new WrapperContentImp(text, position.line, beforeEnterText), true, position.line + 1);
 
-        var tabSpaces = TextUtils.getTabSpaces(language);
 
         if (afterEnterAction == null) {
             return new Pair<>(beforeEnterIndent, beforeEnterIndent);
@@ -188,8 +184,8 @@ public class TextMateNewlineHandler implements NewlineHandler {
         var afterEnterIndent = afterEnterAction.indentation;
         var indent = "";
 
-        if (tabSpaces.isInsertSpaces()) {
-            indent = " ".repeat(tabSpaces.getTabSize());
+        if (language.useTab()) {
+            indent = " ".repeat(language.getTabSize());
         } else {
             indent = "\t";
         }
@@ -418,24 +414,27 @@ public class TextMateNewlineHandler implements NewlineHandler {
             return null;
         }
 
+        final EnterAction.IndentAction indentAction = enterResult.indentAction;
+        String appendText = enterResult.appendText;
+        final Integer removeText = enterResult.removeText;
         // Here we add `\t` to appendText first because enterAction is leveraging
         // appendText and removeText to change indentation.
-        if (enterResult.appendText == null) {
-            if (enterResult.indentAction == EnterAction.IndentAction.Indent || enterResult.indentAction == EnterAction.IndentAction.IndentOutdent) {
-                enterResult.appendText = "\t";
+        if (appendText == null) {
+            if (indentAction == EnterAction.IndentAction.Indent
+                    || indentAction == EnterAction.IndentAction.IndentOutdent) {
+                appendText = "\t";
             } else {
-                enterResult.appendText = "";
+                appendText = "";
             }
-        } else if (enterResult.indentAction == EnterAction.IndentAction.Indent) {
-            enterResult.appendText = "\t" + enterResult.appendText;
+        } else if (indentAction == EnterAction.IndentAction.Indent) {
+            appendText = "\t" + appendText;
         }
 
-        final var removeText = enterResult.removeText;
         if (removeText != null) {
             indentation = indentation.substring(0, indentation.length() - removeText);
         }
 
-        return new CompleteEnterAction(enterResult, indentation);
+        return new CompleteEnterAction(indentAction, appendText, removeText, indentation);
 
     }
 
@@ -444,9 +443,9 @@ public class TextMateNewlineHandler implements NewlineHandler {
         if (str.startsWith("\t")) { // $NON-NLS-1$
             return str.substring(1);
         }
-        final TabSpacesInfo tabSpaces = getTabSpaces();
-        if (tabSpaces.isInsertSpaces()) {
-            final char[] chars = new char[tabSpaces.getTabSize()];
+
+        if (language.useTab()) {
+            final char[] chars = new char[language.getTabSize()];
             Arrays.fill(chars, ' ');
             final String spaces = new String(chars);
             if (str.startsWith(spaces)) {
@@ -458,12 +457,7 @@ public class TextMateNewlineHandler implements NewlineHandler {
 
 
     private String normalizeIndentation(final String str) {
-        final TabSpacesInfo tabSpaces = getTabSpaces();
-        return TextUtils.normalizeIndentation(str, tabSpaces.getTabSize(), tabSpaces.isInsertSpaces());
-    }
-
-    private TabSpacesInfo getTabSpaces() {
-        return TextUtils.getTabSpaces(language);
+        return TextUtils.normalizeIndentation(str, language.getTabSize(), !language.useTab());
     }
 
 

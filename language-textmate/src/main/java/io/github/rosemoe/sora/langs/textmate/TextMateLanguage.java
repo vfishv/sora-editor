@@ -1,7 +1,7 @@
 /*
  *    sora-editor - the awesome code editor for Android
  *    https://github.com/Rosemoe/sora-editor
- *    Copyright (C) 2020-2023  Rosemoe
+ *    Copyright (C) 2020-2024  Rosemoe
  *
  *     This library is free software; you can redistribute it and/or
  *     modify it under the terms of the GNU Lesser General Public
@@ -32,10 +32,9 @@ import org.eclipse.jdt.annotation.Nullable;
 import org.eclipse.tm4e.core.grammar.IGrammar;
 import org.eclipse.tm4e.core.registry.IGrammarSource;
 import org.eclipse.tm4e.core.registry.IThemeSource;
-import org.eclipse.tm4e.languageconfiguration.model.LanguageConfiguration;
+import org.eclipse.tm4e.languageconfiguration.internal.model.LanguageConfiguration;
 
 import java.io.Reader;
-import java.util.Objects;
 
 import io.github.rosemoe.sora.lang.EmptyLanguage;
 import io.github.rosemoe.sora.lang.analysis.AnalyzeManager;
@@ -51,7 +50,6 @@ import io.github.rosemoe.sora.langs.textmate.utils.StringUtils;
 import io.github.rosemoe.sora.text.CharPosition;
 import io.github.rosemoe.sora.text.ContentReference;
 import io.github.rosemoe.sora.util.MyCharacter;
-import io.github.rosemoe.sora.widget.SymbolPairMatch;
 
 public class TextMateLanguage extends EmptyLanguage {
 
@@ -94,7 +92,6 @@ public class TextMateLanguage extends EmptyLanguage {
         symbolPairMatch = new TextMateSymbolPairMatch(this);
 
         createAnalyzerAndNewlineHandler(grammar, languageConfiguration);
-
     }
 
 
@@ -238,7 +235,10 @@ public class TextMateLanguage extends EmptyLanguage {
     @NonNull
     @Override
     public AnalyzeManager getAnalyzeManager() {
-        return Objects.requireNonNullElse(textMateAnalyzer, EmptyAnalyzeManager.INSTANCE);
+        if (textMateAnalyzer == null) {
+            return EmptyAnalyzeManager.INSTANCE;
+        }
+        return textMateAnalyzer;
     }
 
     @Override
@@ -272,7 +272,7 @@ public class TextMateLanguage extends EmptyLanguage {
     }
 
     @Override
-    public SymbolPairMatch getSymbolPairs() {
+    public TextMateSymbolPairMatch getSymbolPairs() {
         return symbolPairMatch;
     }
 

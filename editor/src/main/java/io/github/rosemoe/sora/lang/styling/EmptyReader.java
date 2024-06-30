@@ -1,7 +1,7 @@
 /*
  *    sora-editor - the awesome code editor for Android
  *    https://github.com/Rosemoe/sora-editor
- *    Copyright (C) 2020-2023  Rosemoe
+ *    Copyright (C) 2020-2024  Rosemoe
  *
  *     This library is free software; you can redistribute it and/or
  *     modify it under the terms of the GNU Lesser General Public
@@ -30,14 +30,18 @@ import io.github.rosemoe.sora.widget.schemes.EditorColorScheme;
 
 public class EmptyReader implements Spans.Reader {
 
+    private final static EmptyReader INSTANCE = new EmptyReader();
+
     private final List<Span> spans;
-    private boolean moved;
 
     public EmptyReader() {
         spans = new ArrayList<>(1);
-        spans.add(Span.obtain(0, EditorColorScheme.TEXT_NORMAL));
+        spans.add(SpanFactory.obtain(0, EditorColorScheme.TEXT_NORMAL));
     }
 
+    public static EmptyReader getInstance() {
+        return INSTANCE;
+    }
 
     @Override
     public void moveToLine(int line) {
@@ -56,6 +60,6 @@ public class EmptyReader implements Spans.Reader {
 
     @Override
     public List<Span> getSpansOnLine(int line) {
-        return spans;
+        return new ArrayList<>(spans);
     }
 }

@@ -1,7 +1,7 @@
 /*
  *    sora-editor - the awesome code editor for Android
  *    https://github.com/Rosemoe/sora-editor
- *    Copyright (C) 2020-2023  Rosemoe
+ *    Copyright (C) 2020-2024  Rosemoe
  *
  *     This library is free software; you can redistribute it and/or
  *     modify it under the terms of the GNU Lesser General Public
@@ -24,12 +24,10 @@
 package io.github.rosemoe.sora.lang;
 
 import android.os.Bundle;
-
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.annotation.UiThread;
 import androidx.annotation.WorkerThread;
-
 import io.github.rosemoe.sora.lang.analysis.AnalyzeManager;
 import io.github.rosemoe.sora.lang.completion.CompletionCancelledException;
 import io.github.rosemoe.sora.lang.completion.CompletionHelper;
@@ -107,7 +105,8 @@ public interface Language {
      * @throws io.github.rosemoe.sora.lang.completion.CompletionCancelledException This thread can be abandoned
      *                                                                             by the editor framework because the auto-completion items of
      *                                                                             this invocation are no longer needed by the user. This can either be thrown
-     *                                                                             by {@link ContentReference} or {@link CompletionPublisher}. How the exceptions will be thrown is according to
+     *                                                                             by {@link ContentReference} or {@link CompletionPublisher}.
+     *                                                                             How the exceptions will be thrown is according to
      *                                                                             your settings: {@link #getInterruptionLevel()}
      * @see ContentReference
      * @see CompletionPublisher
@@ -120,13 +119,36 @@ public interface Language {
                              @NonNull Bundle extraArguments) throws CompletionCancelledException;
 
     /**
-     * Get advance for indent
+     * Get delta indent spaces count.
      *
-     * @param content Content of a line
-     * @return Advance space count
+     * @param content Content of given line.
+     * @param line    0-indexed line number. The indentation is applied on line index: {@code line + 1}.
+     * @param column  Column on the given line, where a line separator is inserted.
+     * @return Delta count of indent spaces. It can be a negative/positive number or zero.
      */
     @UiThread
     int getIndentAdvance(@NonNull ContentReference content, int line, int column);
+
+    /**
+     * Get delta indent spaces count.
+     *
+     * @param content          Content of given line.
+     * @param line             0-indexed line number. The indentation is applied on line index: {@code line + 1}.
+     * @param column           Column on the given line, where a line separator is inserted.
+     * @param spaceCountOnLine The number of spaces on {@code line}.
+     * @param tabCountOnLine   The number of tabs on {@code line}.
+     * @return Delta count of indent spaces. It can be a negative/positive number or zero.
+     */
+    @UiThread
+    default int getIndentAdvance(
+      @NonNull ContentReference content,
+      int line,
+      int column,
+      int spaceCountOnLine,
+      int tabCountOnLine
+    ) {
+        return getIndentAdvance(content, line, column);
+    }
 
     /**
      * Use tab to format

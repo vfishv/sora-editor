@@ -1,7 +1,7 @@
 /*
  *    sora-editor - the awesome code editor for Android
  *    https://github.com/Rosemoe/sora-editor
- *    Copyright (C) 2020-2023  Rosemoe
+ *    Copyright (C) 2020-2024  Rosemoe
  *
  *     This library is free software; you can redistribute it and/or
  *     modify it under the terms of the GNU Lesser General Public
@@ -26,8 +26,11 @@ package io.github.rosemoe.sora.event;
 import android.view.MotionEvent;
 
 import androidx.annotation.NonNull;
+import androidx.annotation.Nullable;
 
+import io.github.rosemoe.sora.lang.styling.Span;
 import io.github.rosemoe.sora.text.CharPosition;
+import io.github.rosemoe.sora.text.TextRange;
 import io.github.rosemoe.sora.widget.CodeEditor;
 
 /**
@@ -38,48 +41,12 @@ import io.github.rosemoe.sora.widget.CodeEditor;
  *
  * @author Rosemoe
  */
-public class LongPressEvent extends Event {
+public class LongPressEvent extends EditorMotionEvent {
 
-    private final CharPosition pos;
-    private final MotionEvent event;
 
-    public LongPressEvent(@NonNull CodeEditor editor, @NonNull CharPosition position, @NonNull MotionEvent event) {
-        super(editor);
-        this.pos = position;
-        this.event = event;
-    }
-
-    @Override
-    public boolean canIntercept() {
-        return true;
-    }
-
-    public int getLine() {
-        return pos.line;
-    }
-
-    public int getColumn() {
-        return pos.column;
-    }
-
-    public int getIndex() {
-        return pos.index;
-    }
-
-    public float getX() {
-        return event.getX();
-    }
-
-    public float getY() {
-        return event.getY();
-    }
-
-    /**
-     * Get original event object from Android framework
-     */
-    @NonNull
-    public MotionEvent getCausingEvent() {
-        return event;
+    public LongPressEvent(@NonNull CodeEditor editor, @NonNull CharPosition position, @NonNull MotionEvent event,
+                          @Nullable Span span, @Nullable TextRange spanRange) {
+        super(editor, position, event, span, spanRange);
     }
 
 }

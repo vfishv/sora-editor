@@ -1,7 +1,7 @@
 /*
  *    sora-editor - the awesome code editor for Android
  *    https://github.com/Rosemoe/sora-editor
- *    Copyright (C) 2020-2023  Rosemoe
+ *    Copyright (C) 2020-2024  Rosemoe
  *
  *     This library is free software; you can redistribute it and/or
  *     modify it under the terms of the GNU Lesser General Public
@@ -95,11 +95,10 @@ public final class CharPosition {
 
     @Override
     public boolean equals(Object another) {
-        if (another instanceof CharPosition) {
-            CharPosition a = (CharPosition) another;
-            return a.column == column &&
-                    a.line == line &&
-                    a.index == index;
+        if (another instanceof CharPosition pos) {
+            return pos.column == column &&
+                    pos.line == line &&
+                    pos.index == index;
         }
         return false;
     }

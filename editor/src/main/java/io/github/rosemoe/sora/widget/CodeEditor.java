@@ -1,7 +1,7 @@
 /*
  *    sora-editor - the awesome code editor for Android
  *    https://github.com/Rosemoe/sora-editor
- *    Copyright (C) 2020-2023  Rosemoe
+ *    Copyright (C) 2020-2024  Rosemoe
  *
  *     This library is free software; you can redistribute it and/or
  *     modify it under the terms of the GNU Lesser General Public
@@ -28,8 +28,8 @@ import android.app.AlertDialog;
 import android.content.ClipData;
 import android.content.ClipboardManager;
 import android.content.Context;
+import android.content.res.Configuration;
 import android.content.res.Resources;
-import android.content.res.TypedArray;
 import android.graphics.Canvas;
 import android.graphics.Matrix;
 import android.graphics.Rect;
@@ -43,16 +43,18 @@ import android.util.AttributeSet;
 import android.util.Log;
 import android.util.TypedValue;
 import android.view.ActionMode;
+import android.view.ContextMenu;
 import android.view.ContextThemeWrapper;
+import android.view.DragEvent;
 import android.view.GestureDetector;
 import android.view.InputDevice;
 import android.view.KeyEvent;
 import android.view.Menu;
 import android.view.MenuItem;
 import android.view.MotionEvent;
+import android.view.PointerIcon;
 import android.view.ScaleGestureDetector;
 import android.view.View;
-import android.view.ViewConfiguration;
 import android.view.ViewGroup;
 import android.view.ViewParent;
 import android.view.accessibility.AccessibilityEvent;
@@ -67,23 +69,35 @@ import android.widget.EdgeEffect;
 import android.widget.EditText;
 import android.widget.SearchView;
 import android.widget.Toast;
+
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.annotation.Px;
 import androidx.annotation.UiThread;
+
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Objects;
+
 import io.github.rosemoe.sora.I18nConfig;
 import io.github.rosemoe.sora.R;
 import io.github.rosemoe.sora.annotations.UnsupportedUserUsage;
 import io.github.rosemoe.sora.event.BuildEditorInfoEvent;
 import io.github.rosemoe.sora.event.ColorSchemeUpdateEvent;
 import io.github.rosemoe.sora.event.ContentChangeEvent;
+import io.github.rosemoe.sora.event.CreateContextMenuEvent;
+import io.github.rosemoe.sora.event.EditorAttachStateChangeEvent;
+import io.github.rosemoe.sora.event.EditorFocusChangeEvent;
+import io.github.rosemoe.sora.event.EditorFormatEvent;
 import io.github.rosemoe.sora.event.EditorReleaseEvent;
 import io.github.rosemoe.sora.event.Event;
 import io.github.rosemoe.sora.event.EventManager;
 import io.github.rosemoe.sora.event.EventReceiver;
+import io.github.rosemoe.sora.event.HoverEvent;
 import io.github.rosemoe.sora.event.ScrollEvent;
 import io.github.rosemoe.sora.event.SelectionChangeEvent;
 import io.github.rosemoe.sora.event.SubscriptionReceipt;
+import io.github.rosemoe.sora.event.TextSizeChangeEvent;
 import io.github.rosemoe.sora.graphics.Paint;
 import io.github.rosemoe.sora.lang.EmptyLanguage;
 import io.github.rosemoe.sora.lang.Language;
@@ -92,6 +106,7 @@ import io.github.rosemoe.sora.lang.diagnostic.DiagnosticsContainer;
 import io.github.rosemoe.sora.lang.format.Formatter;
 import io.github.rosemoe.sora.lang.styling.CodeBlock;
 import io.github.rosemoe.sora.lang.styling.Span;
+import io.github.rosemoe.sora.lang.styling.SpanFactory;
 import io.github.rosemoe.sora.lang.styling.Styles;
 import io.github.rosemoe.sora.text.CharPosition;
 import io.github.rosemoe.sora.text.Content;
@@ -99,24 +114,26 @@ import io.github.rosemoe.sora.text.ContentLine;
 import io.github.rosemoe.sora.text.ContentListener;
 import io.github.rosemoe.sora.text.ContentReference;
 import io.github.rosemoe.sora.text.Cursor;
-import io.github.rosemoe.sora.text.LineRemoveListener;
 import io.github.rosemoe.sora.text.LineSeparator;
 import io.github.rosemoe.sora.text.TextLayoutHelper;
 import io.github.rosemoe.sora.text.TextRange;
 import io.github.rosemoe.sora.text.TextUtils;
 import io.github.rosemoe.sora.text.method.KeyMetaStates;
 import io.github.rosemoe.sora.util.Chars;
+import io.github.rosemoe.sora.util.ClipDataUtils;
 import io.github.rosemoe.sora.util.EditorHandler;
 import io.github.rosemoe.sora.util.Floats;
 import io.github.rosemoe.sora.util.IntPair;
+import io.github.rosemoe.sora.util.KeyboardUtils;
 import io.github.rosemoe.sora.util.Logger;
 import io.github.rosemoe.sora.util.LongArrayList;
 import io.github.rosemoe.sora.util.Numbers;
 import io.github.rosemoe.sora.util.TemporaryFloatBuffer;
 import io.github.rosemoe.sora.util.ThemeUtils;
+import io.github.rosemoe.sora.util.ViewUtils;
 import io.github.rosemoe.sora.widget.component.EditorAutoCompletion;
 import io.github.rosemoe.sora.widget.component.EditorBuiltinComponent;
-import io.github.rosemoe.sora.widget.component.EditorCompletionAdapter;
+import io.github.rosemoe.sora.widget.component.EditorContextMenuCreator;
 import io.github.rosemoe.sora.widget.component.EditorDiagnosticTooltipWindow;
 import io.github.rosemoe.sora.widget.component.EditorTextActionWindow;
 import io.github.rosemoe.sora.widget.component.Magnifier;
@@ -124,6 +141,7 @@ import io.github.rosemoe.sora.widget.layout.Layout;
 import io.github.rosemoe.sora.widget.layout.LineBreakLayout;
 import io.github.rosemoe.sora.widget.layout.ViewMeasureHelper;
 import io.github.rosemoe.sora.widget.layout.WordwrapLayout;
+import io.github.rosemoe.sora.widget.rendering.RenderContext;
 import io.github.rosemoe.sora.widget.schemes.EditorColorScheme;
 import io.github.rosemoe.sora.widget.snippet.SnippetController;
 import io.github.rosemoe.sora.widget.style.CursorAnimator;
@@ -136,9 +154,6 @@ import io.github.rosemoe.sora.widget.style.builtin.DefaultLineNumberTip;
 import io.github.rosemoe.sora.widget.style.builtin.HandleStyleDrop;
 import io.github.rosemoe.sora.widget.style.builtin.HandleStyleSideDrop;
 import io.github.rosemoe.sora.widget.style.builtin.MoveCursorAnimator;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Objects;
 import kotlin.text.StringsKt;
 
 /**
@@ -153,7 +168,7 @@ import kotlin.text.StringsKt;
  * @author Rosemoe
  */
 @SuppressWarnings("unused")
-public class CodeEditor extends View implements ContentListener, Formatter.FormatResultReceiver, LineRemoveListener {
+public class CodeEditor extends View implements ContentListener, Formatter.FormatResultReceiver {
 
     /**
      * The default text size when creating the editor object. Unit is sp.
@@ -215,19 +230,6 @@ public class CodeEditor extends View implements ContentListener, Formatter.Forma
      * @see #setNonPrintablePaintingFlags(int)
      */
     public static final int FLAG_DRAW_WHITESPACE_IN_SELECTION = 1 << 6;
-    /**
-     * Adjust the completion window's position scheme according to the device's screen size.
-     */
-    public static final int WINDOW_POS_MODE_AUTO = 0;
-    /**
-     * Completion window always follow the cursor
-     */
-    public static final int WINDOW_POS_MODE_FOLLOW_CURSOR_ALWAYS = 1;
-    /**
-     * Completion window always stay at the bottom of view and occupies the
-     * horizontal viewport
-     */
-    public static final int WINDOW_POS_MODE_FULL_WIDTH_ALWAYS = 2;
     /*
      * Internal state identifiers of action mode
      */
@@ -245,10 +247,11 @@ public class CodeEditor extends View implements ContentListener, Formatter.Forma
     protected SymbolPairMatch languageSymbolPairs;
     protected EditorTextActionWindow textActionWindow;
     protected EditorDiagnosticTooltipWindow diagnosticTooltip;
+    protected EditorContextMenuCreator contextMenuCreator;
     protected List<Span> defaultSpans = new ArrayList<>(2);
     protected EditorStyleDelegate styleDelegate;
     int startedActionMode;
-    CharPosition selectionAnchor;
+    protected CharPosition selectionAnchor;
     EditorInputConnection inputConnection;
     EventManager eventManager;
     Layout layout;
@@ -276,10 +279,14 @@ public class CodeEditor extends View implements ContentListener, Formatter.Forma
     private boolean editable;
     private boolean wordwrap;
     private boolean undoEnabled;
+    private boolean mouseHover;
+    private boolean mouseButtonPressed;
+    private boolean lastAnchorIsSelLeft;
     private volatile boolean layoutBusy;
     private boolean displayLnPanel;
     private int lnPanelPosition;
     private int lnPanelPositionMode;
+    private int rejectComposingCount;
     private boolean released;
     private boolean lineNumberEnabled;
     private boolean blockLineEnabled;
@@ -296,8 +303,11 @@ public class CodeEditor extends View implements ContentListener, Formatter.Forma
     private boolean lastCursorState;
     private boolean stickyTextSelection;
     private boolean highlightBracketPair;
+    private boolean isInLongSelect;
     private boolean anyWrapContentSet;
     private boolean renderFunctionCharacters;
+    private boolean isSoftKbdEnabled;
+    private boolean isDisableSoftKbdOnHardKbd;
     private SelectionHandleStyle.HandleDescriptor handleDescLeft;
     private SelectionHandleStyle.HandleDescriptor handleDescRight;
     private SelectionHandleStyle.HandleDescriptor handleDescInsert;
@@ -329,6 +339,7 @@ public class CodeEditor extends View implements ContentListener, Formatter.Forma
     private Bundle extraArguments;
     private Styles textStyles;
     private DiagnosticsContainer diagnostics;
+    private RenderContext renderContext;
     private EditorRenderer renderer;
     private boolean hardwareAccAllowed;
     private float scrollerFinalX;
@@ -337,6 +348,7 @@ public class CodeEditor extends View implements ContentListener, Formatter.Forma
     private boolean horizontalAbsorb;
     private LineSeparator lineSeparator;
     private TextRange lastInsertion;
+    private TextRange lastSelectedTextRange;
     private SnippetController snippetController;
 
     public CodeEditor(Context context) {
@@ -354,6 +366,7 @@ public class CodeEditor extends View implements ContentListener, Formatter.Forma
     public CodeEditor(Context context, AttributeSet attrs, int defStyleAttr, int defStyleRes) {
         super(context, attrs, defStyleAttr, defStyleRes);
         initialize(attrs, defStyleAttr, defStyleRes);
+        applyAttributeSets(attrs, defStyleAttr, defStyleRes);
     }
 
     /**
@@ -385,6 +398,8 @@ public class CodeEditor extends View implements ContentListener, Formatter.Forma
             return (T) textActionWindow;
         } else if (clazz == EditorDiagnosticTooltipWindow.class) {
             return (T) diagnosticTooltip;
+        } else if (clazz == EditorContextMenuCreator.class) {
+            return (T) contextMenuCreator;
         } else {
             throw new IllegalArgumentException("Unknown component type");
         }
@@ -410,6 +425,8 @@ public class CodeEditor extends View implements ContentListener, Formatter.Forma
             textActionWindow = (EditorTextActionWindow) replacement;
         } else if (clazz == EditorDiagnosticTooltipWindow.class) {
             diagnosticTooltip = (EditorDiagnosticTooltipWindow) replacement;
+        } else if (clazz == EditorContextMenuCreator.class) {
+            contextMenuCreator = (EditorContextMenuCreator) replacement;
         } else {
             throw new IllegalArgumentException("Unknown component type");
         }
@@ -499,41 +516,17 @@ public class CodeEditor extends View implements ContentListener, Formatter.Forma
      * <p>
      * Initialize variants
      */
-    private void initialize(AttributeSet attrs, int defStyleAttr, int defStyleRes) {
+    protected void initialize(AttributeSet attrs, int defStyleAttr, int defStyleRes) {
         Log.v(LOG_TAG, COPYRIGHT);
 
         eventManager = new EventManager();
         renderFunctionCharacters = true;
+        renderContext = new RenderContext(this);
         renderer = onCreateRenderer();
-
-        var array = getContext().obtainStyledAttributes(attrs, R.styleable.CodeEditor, defStyleAttr, defStyleRes);
-        setHorizontalScrollbarThumbDrawable(array.getDrawable(R.styleable.CodeEditor_android_scrollbarThumbHorizontal));
-        setHorizontalScrollbarTrackDrawable(array.getDrawable(R.styleable.CodeEditor_android_scrollbarTrackHorizontal));
-        setVerticalScrollbarThumbDrawable(array.getDrawable(R.styleable.CodeEditor_android_scrollbarThumbVertical));
-        setVerticalScrollbarTrackDrawable(array.getDrawable(R.styleable.CodeEditor_android_scrollbarTrackVertical));
-        setLnPanelPositionMode(array.getInt(R.styleable.CodeEditor_lnPanelPositionMode, LineInfoPanelPositionMode.FOLLOW));
-        setLnPanelPosition(array.getInt(R.styleable.CodeEditor_lnPanelPosition, LineInfoPanelPosition.CENTER));
-        array.recycle();
 
         styleDelegate = new EditorStyleDelegate(this);
 
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            var configuration = ViewConfiguration.get(getContext());
-            verticalScrollFactor = configuration.getScaledVerticalScrollFactor();
-        } else {
-            TypedArray a = null;
-            try {
-                a = getContext().obtainStyledAttributes(new int[]{android.R.attr.listPreferredItemHeight});
-                verticalScrollFactor = a.getFloat(0, 32);
-            } catch (Exception e) {
-                Log.e(LOG_TAG, "Failed to get scroll factor, using default.", e);
-                verticalScrollFactor = 32;
-            } finally {
-                if (a != null) {
-                    a.recycle();
-                }
-            }
-        }
+        verticalScrollFactor = ViewUtils.getVerticalScrollFactor(getContext());
         lineSeparator = LineSeparator.LF;
         lineNumberTipTextProvider = DefaultLineNumberTip.INSTANCE;
         formatTip = I18nConfig.getString(getContext(), R.string.sora_editor_editor_formatting);
@@ -580,6 +573,7 @@ public class CodeEditor extends View implements ContentListener, Formatter.Forma
         edgeEffectHorizontal = new EdgeEffect(getContext());
         textActionWindow = new EditorTextActionWindow(this);
         diagnosticTooltip = new EditorDiagnosticTooltipWindow(this);
+        contextMenuCreator = new EditorContextMenuCreator(this);
         setEditorLanguage(null);
         setText(null);
         setTabWidth(4);
@@ -595,7 +589,8 @@ public class CodeEditor extends View implements ContentListener, Formatter.Forma
         setHardwareAcceleratedDrawAllowed(true);
         setInterceptParentHorizontalScrollIfNeeded(false);
         setTypefaceText(Typeface.DEFAULT);
-        setCompletionWndPositionMode(WINDOW_POS_MODE_AUTO);
+        setSoftKeyboardEnabled(true);
+        setDisableSoftKbdIfHardKbdAvailable(true);
 
         // Issue #41 View being highlighted when focused on Android 11
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
@@ -610,27 +605,51 @@ public class CodeEditor extends View implements ContentListener, Formatter.Forma
         snippetController = new SnippetController(this);
     }
 
+    /**
+     * Apply attributes from XML
+     */
+    protected void applyAttributeSets(AttributeSet attrs, int defStyleAttr, int defStyleRes) {
+        var array = getContext().obtainStyledAttributes(attrs, R.styleable.CodeEditor, defStyleAttr, defStyleRes);
+
+        setHorizontalScrollbarThumbDrawable(array.getDrawable(R.styleable.CodeEditor_scrollbarThumbHorizontal));
+        setHorizontalScrollbarTrackDrawable(array.getDrawable(R.styleable.CodeEditor_scrollbarTrackHorizontal));
+        setVerticalScrollbarThumbDrawable(array.getDrawable(R.styleable.CodeEditor_scrollbarThumbVertical));
+        setVerticalScrollbarTrackDrawable(array.getDrawable(R.styleable.CodeEditor_scrollbarTrackVertical));
+
+        setLnPanelPositionMode(array.getInt(R.styleable.CodeEditor_lnPanelPositionMode, LineInfoPanelPositionMode.FOLLOW));
+        setLnPanelPosition(array.getInt(R.styleable.CodeEditor_lnPanelPosition, LineInfoPanelPosition.CENTER));
+
+        setDividerWidth(array.getDimension(R.styleable.CodeEditor_dividerWidth, getDividerWidth()));
+        setDividerMargin(array.getDimension(R.styleable.CodeEditor_dividerMargin, this.dividerMarginLeft), array.getDimension(R.styleable.CodeEditor_dividerMargin, this.dividerMarginRight));
+        setPinLineNumber(array.getBoolean(R.styleable.CodeEditor_pinLineNumber, false));
+
+        setHighlightCurrentBlock(array.getBoolean(R.styleable.CodeEditor_highlightCurrentBlock, true));
+        setHighlightCurrentLine(array.getBoolean(R.styleable.CodeEditor_highlightCurrentLine, true));
+        setHighlightBracketPair(array.getBoolean(R.styleable.CodeEditor_highlightBracketPair, true));
+
+        setLigatureEnabled(array.getBoolean(R.styleable.CodeEditor_ligatures, true));
+        setLineNumberEnabled(array.getBoolean(R.styleable.CodeEditor_lineNumberVisible, isLineNumberEnabled()));
+        getComponent(EditorAutoCompletion.class).setEnabled(array.getBoolean(R.styleable.CodeEditor_autoCompleteEnabled, true));
+        props.symbolPairAutoCompletion = array.getBoolean(R.styleable.CodeEditor_symbolCompletionEnabled, true);
+        setRenderFunctionCharacters(array.getBoolean(R.styleable.CodeEditor_renderFunctionChars, isRenderFunctionCharacters()));
+        setScalable(array.getBoolean(R.styleable.CodeEditor_scalable, isScalable()));
+
+        setTextSizePx(array.getDimension(R.styleable.CodeEditor_textSize, getTextSizePx()));
+        setCursorBlinkPeriod(array.getInt(R.styleable.CodeEditor_cursorBlinkPeriod, getCursorBlink().period));
+        setTabWidth(array.getInt(R.styleable.CodeEditor_tabWidth, getTabWidth()));
+
+        int wordwrapMode = array.getInt(R.styleable.CodeEditor_wordwrapMode, 0);
+        if (wordwrapMode != 0) {
+            setWordwrap(true, wordwrapMode > 1);
+        }
+
+        setText(array.getString(R.styleable.CodeEditor_text));
+
+        array.recycle();
+    }
+
     public SnippetController getSnippetController() {
         return snippetController;
-    }
-
-    /**
-     * @see #setCompletionWndPositionMode(int)
-     */
-    public int getCompletionWndPositionMode() {
-        return completionWndPosMode;
-    }
-
-    /**
-     * Set how should we control the position&size of completion window
-     *
-     * @see #WINDOW_POS_MODE_AUTO
-     * @see #WINDOW_POS_MODE_FOLLOW_CURSOR_ALWAYS
-     * @see #WINDOW_POS_MODE_FULL_WIDTH_ALWAYS
-     */
-    public void setCompletionWndPositionMode(int mode) {
-        completionWndPosMode = mode;
-        updateCompletionWindowPosition();
     }
 
     /**
@@ -728,16 +747,6 @@ public class CodeEditor extends View implements ContentListener, Formatter.Forma
     }
 
     /**
-     * Set adapter for auto-completion window
-     * Will take effect next time the window updates
-     *
-     * @param adapter New adapter, maybe null
-     */
-    public void setAutoCompletionItemAdapter(@Nullable EditorCompletionAdapter adapter) {
-        completionWindow.setAdapter(adapter);
-    }
-
-    /**
      * Set cursor blinking period
      * If zero or negative period is passed, the cursor will always be shown.
      *
@@ -768,16 +777,6 @@ public class CodeEditor extends View implements ContentListener, Formatter.Forma
 
     /**
      * Enable/disable ligature of all types(except 'rlig').
-     * Generally you should disable them unless enabling this will have no effect on text measuring.
-     * <p>
-     * Disabled by default. If you want to enable ligature of a specified type, use
-     * {@link CodeEditor#setFontFeatureSettings(String)}
-     * <p>
-     * For enabling JetBrainsMono font's ligature, Use like this:
-     * <pre class="pretty-print">
-     * CodeEditor editor = ...;
-     * editor.setFontFeatureSettings(enabled ? null : "'liga' 0,'hlig' 0,'dlig' 0,'clig' 0");
-     * </pre>
      */
     public void setLigatureEnabled(boolean enabled) {
         this.ligatureEnabled = enabled;
@@ -912,9 +911,6 @@ public class CodeEditor extends View implements ContentListener, Formatter.Forma
         this.textStyles = null;
         this.diagnostics = null;
 
-        if (completionWindow != null) {
-            completionWindow.hide();
-        }
         // Setup new one
         var mgr = lang.getAnalyzeManager();
         mgr.setReceiver(styleDelegate);
@@ -936,7 +932,7 @@ public class CodeEditor extends View implements ContentListener, Formatter.Forma
         if (snippetController != null) {
             snippetController.stopSnippet();
         }
-        renderer.invalidateRenderNodes();
+        renderContext.invalidateRenderNodes();
         invalidate();
     }
 
@@ -1046,7 +1042,7 @@ public class CodeEditor extends View implements ContentListener, Formatter.Forma
             requestLayoutIfNeeded();
             createLayout();
             if (!wordwrap) {
-                renderer.invalidateRenderNodes();
+                renderContext.invalidateRenderNodes();
             }
             invalidate();
         }
@@ -1278,7 +1274,9 @@ public class CodeEditor extends View implements ContentListener, Formatter.Forma
      * @param size Text size in pixel unit
      */
     protected void setTextSizePxDirect(float size) {
+        float oldTextSize = getTextSizePx();
         renderer.setTextSizePxDirect(size);
+        dispatchEvent(new TextSizeChangeEvent(this, oldTextSize, size));
     }
 
     protected void requestLayoutIfNeeded() {
@@ -1306,45 +1304,12 @@ public class CodeEditor extends View implements ContentListener, Formatter.Forma
         return renderer;
     }
 
+    public RenderContext getRenderContext() {
+        return renderContext;
+    }
+
     public Paint.FontMetricsInt getLineNumberMetrics() {
         return renderer.getLineNumberMetrics();
-    }
-
-    /**
-     * Update displayed lines after drawing
-     */
-    protected void rememberDisplayedLines() {
-        availableFloatArrayRegion = IntPair.pack(getFirstVisibleLine(), getLastVisibleLine());
-    }
-
-    /**
-     * Obtain a float array from previously displayed lines, or either create a new one
-     * if no float array matches the requirement.
-     */
-    protected float[] obtainFloatArray(int desiredSize, boolean usePainter) {
-        var start = IntPair.getFirst(availableFloatArrayRegion);
-        var end = IntPair.getSecond(availableFloatArrayRegion);
-        var firstVis = getFirstVisibleLine();
-        var lastVis = getLastVisibleLine();
-        start = Math.max(0, start - 5);
-        end = Math.min(end + 5, getLineCount());
-        for (int i = start; i < end; i++) {
-            // Find line that is not displaying currently
-            if (i < firstVis || i > lastVis) {
-                var line = usePainter ? renderer.getLine(i) : text.getLine(i);
-                if (line.widthCache != null && line.widthCache.length >= desiredSize) {
-                    line.timestamp = 0;
-                    var res = line.widthCache;
-                    line.widthCache = null;
-                    return res;
-                }
-            }
-            // Skip the region because we can't obtain arrays from here
-            if (i >= firstVis && i <= lastVis) {
-                i = lastVis;
-            }
-        }
-        return new float[desiredSize];
     }
 
     /**
@@ -1371,7 +1336,7 @@ public class CodeEditor extends View implements ContentListener, Formatter.Forma
     public void setHardwareAcceleratedDrawAllowed(boolean acceleratedDraw) {
         hardwareAccAllowed = acceleratedDraw;
         if (acceleratedDraw && !isWordwrap()) {
-            renderer.invalidateRenderNodes();
+            renderContext.invalidateRenderNodes();
         }
     }
 
@@ -1381,14 +1346,14 @@ public class CodeEditor extends View implements ContentListener, Formatter.Forma
      * @param line The line to search
      */
     protected long findLeadingAndTrailingWhitespacePos(ContentLine line) {
-        var buffer = line.value;
+        var buffer = line.getBackingCharArray();
         int column = line.length();
         int leading = 0;
         int trailing = column;
         while (leading < column && isWhitespace(buffer[leading])) {
             leading++;
         }
-        // Only them this action is needed
+        // Only when this action is needed
         if (leading != column && (nonPrintableOptions & (FLAG_DRAW_WHITESPACE_INNER | FLAG_DRAW_WHITESPACE_TRAILING)) != 0) {
             while (trailing > 0 && isWhitespace(buffer[trailing - 1])) {
                 trailing--;
@@ -1521,6 +1486,9 @@ public class CodeEditor extends View implements ContentListener, Formatter.Forma
         }
         for (int i = min; i <= max; i++) {
             CodeBlock block = blocks.get(i);
+            if (block == null) {
+                continue;
+            }
             if (block.endLine >= line && block.startLine <= line) {
                 int dis = block.endLine - block.startLine;
                 if (dis < minDis) {
@@ -1564,8 +1532,8 @@ public class CodeEditor extends View implements ContentListener, Formatter.Forma
     @NonNull
     public List<Span> getSpansForLine(int line) {
         var spanMap = textStyles == null ? null : textStyles.spans;
-        if (defaultSpans.size() == 0) {
-            defaultSpans.add(Span.obtain(0, EditorColorScheme.TEXT_NORMAL));
+        if (defaultSpans.isEmpty()) {
+            defaultSpans.add(SpanFactory.obtain(0, EditorColorScheme.TEXT_NORMAL));
         }
         try {
             if (spanMap != null) {
@@ -1637,6 +1605,115 @@ public class CodeEditor extends View implements ContentListener, Formatter.Forma
     }
 
     /**
+     * Indents the selected lines. Does nothing if the text is not selected.
+     */
+    public void indentSelection() {
+        indentLines(true);
+    }
+
+    /**
+     * Indents the lines. Does nothing if the <code>onlyIfSelected</code> is <code>true</code> and
+     * no text is selected.
+     *
+     * @param onlyIfSelected Set to <code>true</code> if lines must be indented only if the text is
+     *                       selected.
+     */
+    public void indentLines(boolean onlyIfSelected) {
+
+        final var cursor = getCursor();
+        if (onlyIfSelected && !cursor.isSelected()) {
+            return;
+        }
+
+        final var tabString = createTabString();
+        final var text = getText();
+        final var tabWidth = getTabWidth();
+
+        text.beginBatchEdit();
+        for (int i = cursor.getLeftLine(); i <= cursor.getRightLine(); i++) {
+            final var line = text.getLine(i);
+            final var result = TextUtils.countLeadingSpacesAndTabs(line);
+            final var spaceCount = IntPair.getFirst(result);
+            final var tabCount = IntPair.getSecond(result);
+            final var spaces = spaceCount + (tabCount * tabWidth);
+            final var endColumn = spaceCount + tabCount;
+
+            final var requiredSpaces = tabWidth - (spaces % tabWidth);
+            if (spaceCount > 0 && tabCount > 0) {
+                // indentation contains spaces as well as tabs
+                // replace the leading indentation with appropriate indendation (according to language.useTabs())
+                // this should be done while incrementing the indentation
+                final var finalSpaceCount = ((requiredSpaces == 0 ? tabWidth : requiredSpaces) + spaces) / tabWidth;
+                text.replace(i, 0, i, endColumn, StringsKt.repeat(tabString, finalSpaceCount));
+                continue;
+            }
+
+            if (requiredSpaces == 0) {
+                // line is evenly indented
+                // increase the indentation by \t or tabWidthSpaces
+                text.insert(i, endColumn, tabString);
+            } else {
+                // line is oddly indented
+                // We know that a line can never be oddly indented when it is indented only with tabs
+                // therefore, we insert spaces to align the line
+                text.insert(i, endColumn, StringsKt.repeat(" ", requiredSpaces));
+            }
+        }
+        text.endBatchEdit();
+    }
+
+    /**
+     * Removes indentation from the start of the selected lines. If the text is not selected, or if
+     * the start and end selection is on the same line, only the line at the cursor position is
+     * unindented.
+     */
+    public void unindentSelection() {
+        final var cursor = getCursor();
+        final var text = getText();
+        final var tabWidth = getTabWidth();
+        final var tabString = createTabString();
+
+        text.beginBatchEdit();
+        for (int i = cursor.getLeftLine(); i <= cursor.getRightLine(); i++) {
+            final var line = text.getLineString(i);
+            final var result = TextUtils.countLeadingSpacesAndTabs(line);
+            final var spaceCount = IntPair.getFirst(result);
+            final var tabCount = IntPair.getSecond(result);
+            final var spaces = spaceCount + (tabCount * tabWidth);
+            if (spaces == 0) {
+                // line is not indented
+                continue;
+            }
+
+            final var endColumn = spaceCount + tabCount;
+
+            final var extraSpaces = spaces % tabWidth;
+            if (spaceCount > 0 && tabCount > 0) {
+                // indentation contains spaces as well as tabs
+                // replace the leading indentation with appropriate indendation (according to language.useTabs())
+                // this should be done while decrementing the indentation
+                final var finalSpaceCount = Math.abs(spaces - (extraSpaces == 0 ? tabWidth : extraSpaces)) / tabWidth;
+                text.replace(i, 0, i, endColumn, StringsKt.repeat(tabString, finalSpaceCount));
+                continue;
+            }
+
+            if (extraSpaces == 0) {
+                // line is evenly indented
+                // remove tabString.length() characters from the start
+
+                // do not use tabString.length()
+                text.delete(i, endColumn - (tabCount > 0 ? 1 : tabWidth), i, endColumn);
+            } else {
+                // line is oddly indented
+                // We know that a line can never be oddly indented when it is indented only with tabs
+                // therefore, we delete spaces to align the line
+                text.delete(i, endColumn - extraSpaces, i, endColumn);
+            }
+        }
+        text.endBatchEdit();
+    }
+
+    /**
      * Commit a tab to cursor
      */
     protected void commitTab() {
@@ -1646,54 +1723,40 @@ public class CodeEditor extends View implements ContentListener, Formatter.Forma
     }
 
     /**
+     * Indents the line if text is not selected and the cursor is at the start of the line. Inserts
+     * an indentation string otherwise.
+     */
+    public void indentOrCommitTab() {
+        final var cursor = getCursor();
+        if (cursor.isSelected()) {
+            indentSelection();
+            return;
+        }
+
+        final var left = cursor.left();
+        final var line = getText().getLine(left.line);
+
+        final var count = TextUtils.countLeadingSpacesAndTabs(line);
+        final var spaceCount = IntPair.getFirst(count);
+        final var tabCount = IntPair.getSecond(count);
+
+        if (left.column > spaceCount + tabCount) {
+            // there is text before the cursor
+            commitTab();
+            return;
+        }
+
+        indentLines(false);
+    }
+
+    /**
      * Creates the string to insert when <code>KEYCODE_TAB</code> key event is received from the IME.
      *
      * @return The string to insert for tab character.
      */
     protected String createTabString() {
         final var language = getEditorLanguage();
-        if (language.useTab()) {
-            return "\t";
-        }
-        return StringsKt.repeat(" ", getTabWidth());
-    }
-
-    public void updateCompletionWindowPosition() {
-        updateCompletionWindowPosition(true);
-    }
-
-    /**
-     * Apply new position of auto-completion window
-     */
-    protected void updateCompletionWindowPosition(boolean shift) {
-        float panelX = updateCursorAnchor() + dpUnit * 20;
-        float[] rightLayoutOffset = layout.getCharLayoutOffset(cursor.getRightLine(), cursor.getRightColumn());
-        float panelY = rightLayoutOffset[0] - getOffsetY() + getRowHeight() / 2f;
-        float restY = getHeight() - panelY;
-        if (restY > dpUnit * 200) {
-            restY = dpUnit * 200;
-        } else if (restY < dpUnit * 100 && shift) {
-            float offset = 0;
-            while (restY < dpUnit * 100 && getOffsetY() + offset + getRowHeight() <= getScrollMaxY()) {
-                restY += getRowHeight();
-                panelY -= getRowHeight();
-                offset += getRowHeight();
-            }
-            getScroller().startScroll(getOffsetX(), getOffsetY(), 0, (int) offset, 0);
-        }
-        int width;
-        if ((getWidth() < 500 * dpUnit && completionWndPosMode == WINDOW_POS_MODE_AUTO) || completionWndPosMode == WINDOW_POS_MODE_FULL_WIDTH_ALWAYS) {
-            // center mode
-            width = getWidth() * 7 / 8;
-            panelX = getWidth() / 8f / 2f;
-        } else {
-            // follow cursor mode
-            width = (int) Math.min(300 * dpUnit, getWidth() / 2f);
-        }
-        int height = completionWindow.getHeight();
-        completionWindow.setMaxHeight((int) restY);
-        completionWindow.setLocation((int) panelX + getOffsetX(), (int) panelY + getOffsetY());
-        completionWindow.setSize(width, height);
+        return TextUtils.createIndent(getTabWidth(), getTabWidth(), language.useTab());
     }
 
     /**
@@ -1702,15 +1765,7 @@ public class CodeEditor extends View implements ContentListener, Formatter.Forma
      *
      * @return The offset x of right cursor on view
      */
-    protected float updateCursorAnchor() {
-        CursorAnchorInfo.Builder builder = anchorInfoBuilder;
-        builder.reset();
-        matrix.set(getMatrix());
-        int[] b = new int[2];
-        getLocationOnScreen(b);
-        matrix.postTranslate(b[0], b[1]);
-        builder.setMatrix(matrix);
-        builder.setSelectionRange(cursor.getLeft(), cursor.getRight());
+    public float updateCursorAnchor() {
         int l = cursor.getRightLine();
         int column = cursor.getRightColumn();
         boolean visible = true;
@@ -1721,8 +1776,18 @@ public class CodeEditor extends View implements ContentListener, Formatter.Forma
             visible = false;
             x = 0;
         }
-        builder.setInsertionMarkerLocation(x, getRowTop(l) - getOffsetY(), getRowBaseline(l) - getOffsetY(), getRowBottom(l) - getOffsetY(), visible ? CursorAnchorInfo.FLAG_HAS_VISIBLE_REGION : CursorAnchorInfo.FLAG_HAS_INVISIBLE_REGION);
-        inputMethodManager.updateCursorAnchorInfo(this, builder.build());
+        if (props.reportCursorAnchor) {
+            CursorAnchorInfo.Builder builder = anchorInfoBuilder;
+            builder.reset();
+            matrix.set(getMatrix());
+            int[] b = new int[2];
+            getLocationOnScreen(b);
+            matrix.postTranslate(b[0], b[1]);
+            builder.setMatrix(matrix);
+            builder.setSelectionRange(cursor.getLeft(), cursor.getRight());
+            builder.setInsertionMarkerLocation(x, getRowTop(l) - getOffsetY(), getRowBaseline(l) - getOffsetY(), getRowBottom(l) - getOffsetY(), visible ? CursorAnchorInfo.FLAG_HAS_VISIBLE_REGION : CursorAnchorInfo.FLAG_HAS_INVISIBLE_REGION);
+            inputMethodManager.updateCursorAnchorInfo(this, builder.build());
+        }
         return x;
     }
 
@@ -1738,7 +1803,7 @@ public class CodeEditor extends View implements ContentListener, Formatter.Forma
             int line = cur.getLeftLine();
             if (props.deleteEmptyLineFast || (props.deleteMultiSpaces != 1 && col > 0 && text.charAt(line, col - 1) == ' ')) {
                 // Check whether selection is in leading spaces
-                var text = this.text.getLine(cur.getLeftLine()).value;
+                var text = this.text.getLine(cur.getLeftLine()).getBackingCharArray();
                 var inLeading = true;
                 for (int i = col - 1; i >= 0; i--) {
                     char ch = text[i];
@@ -1809,41 +1874,115 @@ public class CodeEditor extends View implements ContentListener, Formatter.Forma
         if (text.length() == 0) {
             return;
         }
-        var cur = cursor;
-        if (cur.isSelected()) {
-            if (text.length() > 0 && text.length() == 1) {
-                var quoteHandler = editorLanguage.getQuickQuoteHandler();
-                System.out.println(quoteHandler);
-                var result = quoteHandler == null ? null : quoteHandler.onHandleTyping(text.toString(), this.text, getCursorRange(), getStyles());
-                if (result != null && result.isConsumed()) {
-                    var range = result.getNewCursorRange();
-                    if (range != null) {
-                        setSelectionRegion(range.getStart().line, range.getStart().column, range.getEnd().line, range.getEnd().column);
-                    }
-                    return;
-                }
+
+        // replace text
+        SymbolPairMatch.SymbolPair pair = null;
+        if (getProps().symbolPairAutoCompletion && text.length() > 0) {
+            var firstCharFromText = text.charAt(0);
+
+            char[] inputText = null;
+
+            //size > 1
+            if (text.length() > 1) {
+                inputText = text.toString().toCharArray();
             }
-            this.text.replace(cur.getLeftLine(), cur.getLeftColumn(), cur.getRightLine(), cur.getRightColumn(), text);
+
+            pair = languageSymbolPairs.matchBestPair(
+                    this.text, cursor.left(),
+                    inputText, firstCharFromText
+            );
+        }
+
+        var cur = cursor;
+        var editorText = this.text;
+        var quoteHandler = editorLanguage.getQuickQuoteHandler();
+
+        if (pair != null && pair != SymbolPairMatch.SymbolPair.EMPTY_SYMBOL_PAIR
+                && (pair.shouldReplace(this))
+        ) {
+
+            // QuickQuoteHandler can easily implement the feature of AutoSurround
+            // and is at a higher level (customizable),
+            // so if the language implemented QuickQuoteHandler,
+            // the AutoSurround feature is not considered needed because it can be implemented through QuickQuoteHandler
+            if (pair.shouldDoAutoSurround(editorText) && quoteHandler == null) {
+
+                editorText.beginBatchEdit();
+                // insert left
+                editorText.insert(cur.getLeftLine(), cur.getLeftColumn(), pair.open);
+                // editorText.insert(editorCursor.getLeftLine(),editorCursor.getLeftColumn(),selectText);
+                // insert right
+                editorText.insert(cur.getRightLine(), cur.getRightColumn(), pair.close);
+                editorText.endBatchEdit();
+
+                // setSelection
+                setSelectionRegion(cur.getLeftLine(), cur.getLeftColumn(),
+                        cur.getRightLine(), cur.getRightColumn() - pair.close.length());
+
+                return;
+            } else if (cur.isSelected() && quoteHandler != null) {
+                if (text.length() > 0 && text.length() == 1) {
+                    var result = quoteHandler.onHandleTyping(text.toString(), this.text, getCursorRange(), getStyles());
+                    if (result.isConsumed()) {
+                        var range = result.getNewCursorRange();
+                        if (range != null) {
+                            setSelectionRegion(range.getStart().line, range.getStart().column, range.getEnd().line, range.getEnd().column);
+                        }
+                        return;
+                    }
+                }
+            } else {
+                editorText.beginBatchEdit();
+
+                var insertPosition = editorText
+                        .getIndexer()
+                        .getCharPosition(pair.getInsertOffset());
+
+                editorText.replace(insertPosition.line, insertPosition.column,
+                        cur.getRightLine(), cur.getRightColumn(), pair.open);
+                editorText.insert(insertPosition.line, insertPosition.column + pair.open.length(), pair.close);
+                editorText.endBatchEdit();
+
+                var cursorPosition = editorText
+                        .getIndexer()
+                        .getCharPosition(pair.getCursorOffset());
+
+                setSelection(cursorPosition.line, cursorPosition.column);
+
+                return;
+            }
+        }
+
+
+        if (cur.isSelected()) {
+            editorText.replace(cur.getLeftLine(), cur.getLeftColumn(), cur.getRightLine(), cur.getRightColumn(), text);
         } else {
             if (props.autoIndent && text.length() != 0 && applyAutoIndent) {
                 char first = text.charAt(0);
                 if (first == '\n' || first == '\r') {
                     String line = this.text.getLineString(cur.getLeftLine());
-                    int p = 0, count = 0;
+                    int p = 0, spaceCount = 0, tabCount = 0;
                     while (p < cur.getLeftColumn()) {
                         if (isWhitespace(line.charAt(p))) {
                             if (line.charAt(p) == '\t') {
-                                count += tabWidth;
+                                ++tabCount;
                             } else {
-                                count++;
+                                ++spaceCount;
                             }
                             p++;
                         } else {
                             break;
                         }
                     }
+                    int count = spaceCount + (tabCount * tabWidth);
                     try {
-                        count += editorLanguage.getIndentAdvance(new ContentReference(this.text), cur.getLeftLine(), cur.getLeftColumn());
+                        count += editorLanguage.getIndentAdvance(
+                          new ContentReference(this.text),
+                          cur.getLeftLine(),
+                          cur.getLeftColumn(),
+                          spaceCount,
+                          tabCount
+                        );
                     } catch (Exception e) {
                         Log.w(LOG_TAG, "Language object error", e);
                     }
@@ -1856,7 +1995,7 @@ public class CodeEditor extends View implements ContentListener, Formatter.Forma
                     text = sb;
                 }
             }
-            this.text.insert(cur.getLeftLine(), cur.getLeftColumn(), text);
+            editorText.insert(cur.getLeftLine(), cur.getLeftColumn(), text);
         }
     }
 
@@ -1911,6 +2050,10 @@ public class CodeEditor extends View implements ContentListener, Formatter.Forma
         invalidate();
     }
 
+    public boolean hasComposingText() {
+        return inputConnection.composingText.isComposing();
+    }
+
     /**
      * Make the selection visible
      */
@@ -1943,19 +2086,22 @@ public class CodeEditor extends View implements ContentListener, Formatter.Forma
         // y offset is the bottom of row
         float yOffset = layoutOffset[0];
 
-        float targetY = scroller.isFinished() ? getOffsetY() : scroller.getFinalY();
-        float targetX = scroller.isFinished() ? getOffsetX() : scroller.getFinalX();
+        float currFinalY = scroller.isFinished() ? getOffsetY() : scroller.getFinalY();
+        float currFinalX = scroller.isFinished() ? getOffsetX() : scroller.getFinalX();
+        float targetY = currFinalY;
+        float targetX = currFinalX;
 
-        if (yOffset - getRowHeight() < getOffsetY()) {
-            // top invisible
-            targetY = yOffset - getRowHeight() * 2f;
+        int topLines = props.stickyScroll ? props.stickyScrollMaxLines : 2;
+        if (yOffset - getRowHeight() * topLines < currFinalY) {
+            // top may be invisible
+            targetY = yOffset - getRowHeight() * topLines;
         }
-        if (yOffset > getHeight() + getOffsetY()) {
+        if (yOffset > getHeight() + currFinalY) {
             // bottom invisible
             targetY = yOffset - getHeight() + getRowHeight() * 1f;
         }
         float charWidth = column == 0 ? 0 : renderer.measureText(text.getLine(line), line, column - 1, 1);
-        if (xOffset < getOffsetX() + (pinLineNumber ? measureTextRegionOffset() : 0)) {
+        if (xOffset < currFinalX + (pinLineNumber ? measureTextRegionOffset() : 0)) {
             float backupX = targetX;
             var scrollSlopX = getWidth() / 2;
             targetX = xOffset + (pinLineNumber ? -measureTextRegionOffset() : 0) - charWidth;
@@ -1963,7 +2109,7 @@ public class CodeEditor extends View implements ContentListener, Formatter.Forma
                 targetX = Math.max(1, backupX - scrollSlopX);
             }
         }
-        if (xOffset + charWidth > getOffsetX() + getWidth()) {
+        if (xOffset + charWidth > currFinalX + getWidth()) {
             targetX = xOffset + charWidth * 0.8f - getWidth();
         }
 
@@ -2034,6 +2180,20 @@ public class CodeEditor extends View implements ContentListener, Formatter.Forma
     }
 
     /**
+     * Check if the point on editor view, is inside text region on that row
+     */
+    public boolean isScreenPointOnText(float x, float y) {
+        var pos = getPointPositionOnScreen(x, y);
+        var rowIdx = layout.getRowIndexForPosition(text.getCharIndex(IntPair.getFirst(pos), IntPair.getSecond(pos)));
+        var row = layout.getRowAt(rowIdx);
+        var layoutMax = renderer.measureText(text.getLine(row.lineIndex), row.lineIndex, row.startColumn, row.endColumn - row.startColumn);
+        var textRegionX = measureTextRegionOffset();
+        var lineRegionRightX = textRegionX + layoutMax;
+        var offset = getOffsetX() + x;
+        return offset >= textRegionX && offset <= lineRegionRightX;
+    }
+
+    /**
      * Determine character position using positions in scroll coordinate
      *
      * @param xOffset Horizontal position in scroll coordinate
@@ -2054,6 +2214,7 @@ public class CodeEditor extends View implements ContentListener, Formatter.Forma
      * @see IntPair
      */
     public long getPointPositionOnScreen(float x, float y) {
+        y = Math.max(0, y);
         var stuckLines = renderer.lastStuckLines;
         if (stuckLines != null) {
             if (y < stuckLines.size() * getRowHeight()) {
@@ -2133,7 +2294,7 @@ public class CodeEditor extends View implements ContentListener, Formatter.Forma
      */
     public void setBasicDisplayMode(boolean enabled) {
         text.setBidiEnabled(!enabled);
-        renderer.invalidateRenderNodes();
+        renderContext.invalidateRenderNodes();
         renderer.basicDisplayMode = enabled;
         renderer.updateTimestamp();
         invalidate();
@@ -2143,7 +2304,7 @@ public class CodeEditor extends View implements ContentListener, Formatter.Forma
      * @see #setBasicDisplayMode(boolean)
      */
     public boolean isBasicDisplayMode() {
-        return renderer.basicDisplayMode;
+        return renderer.isBasicDisplayMode();
     }
 
     /**
@@ -2210,7 +2371,14 @@ public class CodeEditor extends View implements ContentListener, Formatter.Forma
      * Get the cursor range of editor
      */
     public TextRange getCursorRange() {
-        return new TextRange(cursor.left(), cursor.right());
+        return cursor.getRange();
+    }
+
+    /**
+     * If any text is selected
+     */
+    public boolean isTextSelected() {
+        return cursor.isSelected();
     }
 
     /**
@@ -2232,7 +2400,7 @@ public class CodeEditor extends View implements ContentListener, Formatter.Forma
             throw new IllegalArgumentException("width can not be under 1");
         }
         tabWidth = width;
-        renderer.invalidateRenderNodes();
+        renderContext.invalidateRenderNodes();
         renderer.updateTimestamp();
         requestLayoutIfNeeded();
         invalidate();
@@ -2342,9 +2510,15 @@ public class CodeEditor extends View implements ContentListener, Formatter.Forma
      * Undo last action
      */
     public void undo() {
-        text.undo();
+        var range = text.undo();
+        if (range != null) {
+            try {
+                setSelectionRegion(range.getStart().line, range.getStart().column, range.getEnd().line, range.getEnd().column, true, SelectionChangeEvent.CAUSE_TEXT_MODIFICATION);
+            } catch (IndexOutOfBoundsException e) {
+                // Suppressed, typically because an invalid position is memorized.
+            }
+        }
         notifyIMEExternalCursorChange();
-        completionWindow.hide();
     }
 
     /**
@@ -2353,7 +2527,6 @@ public class CodeEditor extends View implements ContentListener, Formatter.Forma
     public void redo() {
         text.redo();
         notifyIMEExternalCursorChange();
-        completionWindow.hide();
     }
 
     /**
@@ -2428,7 +2601,7 @@ public class CodeEditor extends View implements ContentListener, Formatter.Forma
 
                     @Override
                     public boolean onQueryTextChange(String text) {
-                        if (text == null || text.length() == 0) {
+                        if (text == null || text.isEmpty()) {
                             getSearcher().stopSearch();
                             return false;
                         }
@@ -2456,14 +2629,9 @@ public class CodeEditor extends View implements ContentListener, Formatter.Forma
                     return false;
                 }
                 switch (p2.getItemId()) {
-                    case 1:
-                        getSearcher().gotoPrevious();
-                        break;
-                    case 0:
-                        getSearcher().gotoNext();
-                        break;
-                    case 2:
-                    case 3:
+                    case 1 -> getSearcher().gotoPrevious();
+                    case 0 -> getSearcher().gotoNext();
+                    case 2, 3 -> {
                         final boolean replaceAll = p2.getItemId() == 3;
                         final EditText et = new EditText(getContext());
                         et.setHint(I18nConfig.getResourceId(R.string.sora_editor_replacement));
@@ -2475,13 +2643,13 @@ public class CodeEditor extends View implements ContentListener, Formatter.Forma
                                     if (replaceAll) {
                                         getSearcher().replaceAll(et.getText().toString(), am::finish);
                                     } else {
-                                        getSearcher().replaceThis(et.getText().toString());
+                                        getSearcher().replaceCurrentMatch(et.getText().toString());
                                         am.finish();
                                     }
                                     dialog.dismiss();
                                 })
                                 .show();
-                        break;
+                    }
                 }
                 return false;
             }
@@ -2912,18 +3080,20 @@ public class CodeEditor extends View implements ContentListener, Formatter.Forma
      */
     @UnsupportedUserUsage
     public void setLayoutBusy(boolean busy) {
-        if (layoutBusy && !busy && wordwrap && touchHandler.positionNotApplied) {
-            touchHandler.positionNotApplied = false;
-            int line = IntPair.getFirst(touchHandler.memoryPosition);
-            int column = IntPair.getSecond(touchHandler.memoryPosition);
-            // Compute new scroll position
-            var row = ((WordwrapLayout) layout).findRow(line, column);
-            var afterScrollY = row * getRowHeight() - getHeight() + touchHandler.focusY;
-            var scroller = touchHandler.getScroller();
-            dispatchEvent(new ScrollEvent(this, scroller.getCurrX(),
-                    scroller.getCurrY(), 0, (int) afterScrollY, ScrollEvent.CAUSE_SCALE_TEXT));
-            scroller.startScroll(0, (int) afterScrollY, 0, 0, 0);
-            scroller.abortAnimation();
+        if (layoutBusy && !busy) {
+            if (wordwrap && touchHandler.positionNotApplied) {
+                touchHandler.positionNotApplied = false;
+                int line = IntPair.getFirst(touchHandler.memoryPosition);
+                int column = IntPair.getSecond(touchHandler.memoryPosition);
+                // Compute new scroll position
+                var row = ((WordwrapLayout) layout).findRow(line, column);
+                var afterScrollY = row * getRowHeight() - touchHandler.focusY;
+                var scroller = touchHandler.getScroller();
+                dispatchEvent(new ScrollEvent(this, scroller.getCurrX(),
+                        scroller.getCurrY(), 0, (int) afterScrollY, ScrollEvent.CAUSE_SCALE_TEXT));
+                scroller.startScroll(0, (int) afterScrollY, 0, 0, 0);
+                scroller.abortAnimation();
+            }
             // IMPORTANT restart input after clearing the busy flag
             // otherwise, the connection may fallback to inactive mode
             this.layoutBusy = false;
@@ -2997,9 +3167,65 @@ public class CodeEditor extends View implements ContentListener, Formatter.Forma
     }
 
     /**
+     * Begin a rejection on composing texts
+     */
+    public void beginComposingTextRejection() {
+        rejectComposingCount++;
+    }
+
+    /**
+     * If the editor accepts composing text now, according to composing text rejection count
+     */
+    public boolean acceptsComposingText() {
+        return rejectComposingCount == 0;
+    }
+
+    /**
+     * End a rejection on composing texts
+     */
+    public void endComposingTextRejection() {
+        rejectComposingCount--;
+        if (rejectComposingCount < 0) {
+            rejectComposingCount = 0;
+        }
+    }
+
+    /**
+     * Check if there is a mouse inside editor, hovering
+     */
+    public boolean hasMouseHovering() {
+        return mouseHover;
+    }
+
+    /**
+     * Check if there is a mouse inside editor with any button pressed
+     */
+    public boolean hasMousePressed() {
+        return mouseButtonPressed;
+    }
+
+    /**
+     * Check if editor is in mouse mode.
+     *
+     * @see DirectAccessProps#mouseMode
+     */
+    public boolean isInMouseMode() {
+        switch (props.mouseMode) {
+            case DirectAccessProps.MOUSE_MODE_ALWAYS -> {
+                return true;
+            }
+            case DirectAccessProps.MOUSE_MODE_NEVER -> {
+                return false;
+            }
+        }
+        // MOUSE_MODE_AUTO
+        return hasMouseHovering() || hasMousePressed();
+    }
+
+    /**
      * Get the target cursor to move when shift is pressed
      */
-    private CharPosition getSelectingTarget() {
+    protected CharPosition getSelectingTarget() {
         if (cursor.left().equals(selectionAnchor)) {
             return cursor.right();
         } else {
@@ -3010,7 +3236,7 @@ public class CodeEditor extends View implements ContentListener, Formatter.Forma
     /**
      * Make sure the moving selection is visible
      */
-    void ensureSelectingTargetVisible() {
+    protected void ensureSelectingTargetVisible() {
         if (cursor.left().equals(selectionAnchor)) {
             // Ensure right selection visible
             ensureSelectionVisible();
@@ -3019,141 +3245,70 @@ public class CodeEditor extends View implements ContentListener, Formatter.Forma
         }
     }
 
+    protected void ensureSelectionAnchorAvailable() {
+        if (selectionAnchor == null || !text.isValidPosition(selectionAnchor)) {
+            selectionAnchor = cursor.right();
+        }
+    }
+
     /**
-     * Move the selection down
-     * If the auto complete panel is shown,move the selection in panel to next
+     * Move or extend selection, according to {@code extend} param.
+     *
+     * @param extend True if you want to extend selection.
      */
-    public void moveSelectionDown() {
-        if (selectionAnchor == null) {
-            if (completionWindow.isShowing()) {
-                completionWindow.moveDown();
+    public void moveOrExtendSelection(@NonNull SelectionMovement movement, boolean extend) {
+        if (extend) {
+            extendSelection(movement);
+        } else {
+            moveSelection(movement);
+        }
+    }
+
+    /**
+     * Extend the selection, based on the selection anchor (select text)
+     */
+    public void extendSelection(@NonNull SelectionMovement movement) {
+        ensureSelectionAnchorAvailable();
+        CharPosition sel = movement.getPositionAfterMovement(this, getSelectingTarget());
+        setSelectionRegion(selectionAnchor.line, selectionAnchor.column, sel.line, sel.column, false, SelectionChangeEvent.CAUSE_KEYBOARD_OR_CODE);
+        if (movement == SelectionMovement.PAGE_UP) {
+            touchHandler.scrollBy(0f, -getHeight(), true);
+        } else if (movement == SelectionMovement.PAGE_DOWN) {
+            touchHandler.scrollBy(0f, getHeight(), true);
+        }
+        ensureSelectingTargetVisible();
+    }
+
+    /**
+     * Move the selection. Selected text will be de-selected.
+     */
+    public void moveSelection(@NonNull SelectionMovement movement) {
+        if (cursor.isSelected()) {
+            if (movement == SelectionMovement.LEFT) {
+                setSelection(cursor.getLeftLine(), cursor.getLeftColumn(), SelectionChangeEvent.CAUSE_KEYBOARD_OR_CODE);
                 return;
             }
-            long pos = layout.getDownPosition(cursor.getLeftLine(), cursor.getLeftColumn());
-            setSelection(IntPair.getFirst(pos), IntPair.getSecond(pos));
-        } else {
-            completionWindow.hide();
-            long pos = layout.getDownPosition(getSelectingTarget().getLine(), getSelectingTarget().getColumn());
-            setSelectionRegion(selectionAnchor.line, selectionAnchor.column, IntPair.getFirst(pos), IntPair.getSecond(pos), false);
-            ensureSelectingTargetVisible();
-        }
-    }
-
-    /**
-     * Move the selection up
-     * If Auto complete panel is shown,move the selection in panel to last
-     */
-    public void moveSelectionUp() {
-        if (selectionAnchor == null) {
-            if (completionWindow.isShowing()) {
-                completionWindow.moveUp();
+            if (movement == SelectionMovement.RIGHT) {
+                setSelection(cursor.getRightLine(), cursor.getRightColumn(), SelectionChangeEvent.CAUSE_KEYBOARD_OR_CODE);
                 return;
             }
-            long pos = layout.getUpPosition(cursor.getLeftLine(), cursor.getLeftColumn());
-            setSelection(IntPair.getFirst(pos), IntPair.getSecond(pos));
-        } else {
-            completionWindow.hide();
-            long pos = layout.getUpPosition(getSelectingTarget().getLine(), getSelectingTarget().getColumn());
-            setSelectionRegion(selectionAnchor.line, selectionAnchor.column, IntPair.getFirst(pos), IntPair.getSecond(pos), false);
-            ensureSelectingTargetVisible();
         }
-    }
-
-    /**
-     * Move the selection left
-     */
-    public void moveSelectionLeft() {
-        if (selectionAnchor == null) {
-            if (cursor.isSelected()) {
-                setSelection(cursor.getLeftLine(), cursor.getLeftColumn());
-                return;
+        CharPosition pos;
+        switch (movement.getBasePosition()) {
+            case LEFT_SELECTION -> pos = cursor.left();
+            case RIGHT_SELECTION -> pos = cursor.right();
+            default -> {
+                ensureSelectionAnchorAvailable();
+                pos = selectionAnchor;
             }
-            Cursor c = getCursor();
-            int line = c.getLeftLine();
-            int column = c.getLeftColumn();
-            long pos = cursor.getLeftOf(IntPair.pack(line, column));
-            int lineAfter = IntPair.getFirst(pos);
-            int columnAfter = IntPair.getSecond(pos);
-            setSelection(lineAfter, columnAfter);
-            if (line == lineAfter) {
-                if (completionWindow.isShowing()) {
-                    if (columnAfter == 0) {
-                        completionWindow.hide();
-                    } else {
-                        completionWindow.requireCompletion();
-                    }
-                }
-            }
-        } else {
-            completionWindow.hide();
-            long pos = cursor.getLeftOf(getSelectingTarget().toIntPair());
-            setSelectionRegion(selectionAnchor.line, selectionAnchor.column, IntPair.getFirst(pos), IntPair.getSecond(pos), false);
-            ensureSelectingTargetVisible();
         }
-    }
-
-    /**
-     * Move the selection right
-     */
-    public void moveSelectionRight() {
-        if (selectionAnchor == null) {
-            Cursor c = getCursor();
-            if (c.isSelected()) {
-                setSelection(c.getRightLine(), c.getRightColumn());
-                return;
-            }
-            int line = c.getLeftLine();
-            int column = c.getLeftColumn();
-            int c_column = getText().getColumnCount(line);
-            long pos = cursor.getRightOf(IntPair.pack(line, column));
-            int lineAfter = IntPair.getFirst(pos);
-            int columnAfter = IntPair.getSecond(pos);
-            setSelection(lineAfter, columnAfter);
-            if (line == lineAfter && completionWindow.isShowing()) {
-                completionWindow.requireCompletion();
-            }
-        } else {
-            completionWindow.hide();
-            long pos = cursor.getRightOf(getSelectingTarget().toIntPair());
-            setSelectionRegion(selectionAnchor.line, selectionAnchor.column, IntPair.getFirst(pos), IntPair.getSecond(pos), false);
-            ensureSelectingTargetVisible();
+        CharPosition sel = movement.getPositionAfterMovement(this, pos);
+        if (movement == SelectionMovement.PAGE_UP) {
+            touchHandler.scrollBy(0f, -getHeight(), true);
+        } else if (movement == SelectionMovement.PAGE_DOWN) {
+            touchHandler.scrollBy(0f, getHeight(), true);
         }
-    }
-
-    /**
-     * Move selection to end of line
-     */
-    public void moveSelectionEnd() {
-        if (selectionAnchor == null) {
-            int line = cursor.getLeftLine();
-            if (props.enhancedHomeAndEnd && cursor.getLeftColumn() == getText().getColumnCount(line)) {
-                int column = IntPair.getSecond(TextUtils.findLeadingAndTrailingWhitespacePos(text.getLine(cursor.getLeftLine())));
-                setSelection(cursor.getLeftLine(), column);
-            } else {
-                setSelection(line, getText().getColumnCount(line));
-            }
-        } else {
-            int line = getSelectingTarget().line;
-            setSelectionRegion(selectionAnchor.line, selectionAnchor.column, line, getText().getColumnCount(line), false);
-            ensureSelectingTargetVisible();
-        }
-    }
-
-    /**
-     * Move selection to start of line
-     */
-    public void moveSelectionHome() {
-        if (selectionAnchor == null) {
-            if (props.enhancedHomeAndEnd && cursor.getLeftColumn() == 0) {
-                int column = IntPair.getFirst(TextUtils.findLeadingAndTrailingWhitespacePos(text.getLine(cursor.getLeftLine())));
-                setSelection(cursor.getLeftLine(), column);
-            } else if (cursor.getLeftColumn() != 0) {
-                setSelection(cursor.getLeftLine(), 0);
-            }
-        } else {
-            setSelectionRegion(selectionAnchor.line, selectionAnchor.column, getSelectingTarget().line, 0, false);
-            ensureSelectingTargetVisible();
-        }
+        setSelection(sel.line, sel.column, SelectionChangeEvent.CAUSE_KEYBOARD_OR_CODE);
     }
 
     /**
@@ -3208,11 +3363,15 @@ public class CodeEditor extends View implements ContentListener, Formatter.Forma
         }
         updateCursor();
         updateSelection();
-        if (editable && !touchHandler.hasAnyHeldHandle() && !completionWindow.shouldRejectComposing()) {
+        if (editable && !touchHandler.hasAnyHeldHandle() && acceptsComposingText()) {
             cursorAnimator.markEndPos();
             cursorAnimator.start();
         }
-        renderer.invalidateRenderNodes();
+
+        // Update cursor anchor
+        selectionAnchor = cursor.right();
+
+        renderContext.invalidateRenderNodes();
         if (makeItVisible) {
             ensurePositionVisible(line, column);
         } else {
@@ -3283,7 +3442,7 @@ public class CodeEditor extends View implements ContentListener, Formatter.Forma
         int start = getText().getCharIndex(lineLeft, columnLeft);
         int end = getText().getCharIndex(lineRight, columnRight);
         if (start == end) {
-            setSelection(lineLeft, columnLeft);
+            setSelection(lineLeft, columnLeft, makeRightVisible, cause);
             return;
         }
         if (start > end) {
@@ -3317,8 +3476,13 @@ public class CodeEditor extends View implements ContentListener, Formatter.Forma
         cursor.setRight(lineRight, columnRight);
         updateCursor();
         updateSelection();
-        completionWindow.hide();
-        renderer.invalidateRenderNodes();
+        renderContext.invalidateRenderNodes();
+
+        // Update selection anchor
+        if (!cursor.left().equals(selectionAnchor) && !cursor.right().equals(selectionAnchor)) {
+            selectionAnchor = cursor.right();
+        }
+
         if (makeRightVisible) {
             if (cause == SelectionChangeEvent.CAUSE_SEARCH) {
                 ensurePositionVisible(lineLeft, columnLeft);
@@ -3334,22 +3498,6 @@ public class CodeEditor extends View implements ContentListener, Formatter.Forma
     }
 
     /**
-     * Move to next page
-     */
-    public void movePageDown() {
-        touchHandler.scrollBy(0, getHeight(), true);
-        completionWindow.hide();
-    }
-
-    /**
-     * Move to previous page
-     */
-    public void movePageUp() {
-        touchHandler.scrollBy(0, -getHeight(), true);
-        completionWindow.hide();
-    }
-
-    /**
      * Get system clipboard manager used by editor
      */
     public ClipboardManager getClipboardManager() {
@@ -3361,22 +3509,27 @@ public class CodeEditor extends View implements ContentListener, Formatter.Forma
      */
     public void pasteText() {
         try {
-            if (!clipboardManager.hasPrimaryClip() || clipboardManager.getPrimaryClip() == null) {
+            ClipData clip;
+            if (!clipboardManager.hasPrimaryClip() || (clip = clipboardManager.getPrimaryClip()) == null) {
                 return;
             }
-            var data = clipboardManager.getPrimaryClip().getItemAt(0);
-            var text = data.getText();
-            if (text != null && inputConnection != null) {
-                inputConnection.commitText(text, 1);
-                if (props.formatPastedText) {
-                    formatCodeAsync(lastInsertion.getStart(), lastInsertion.getEnd());
-                }
-                notifyIMEExternalCursorChange();
-            }
-
+            pasteText(ClipDataUtils.clipDataToString(clip));
         } catch (Exception e) {
-            e.printStackTrace();
+            Log.w(LOG_TAG, "Error pasting text to editor", e);
             Toast.makeText(getContext(), e.toString(), Toast.LENGTH_SHORT).show();
+        }
+    }
+
+    /**
+     * Paste external text into editor
+     */
+    public void pasteText(@Nullable CharSequence text) {
+        if (text != null && inputConnection != null) {
+            inputConnection.commitText(text, 1);
+            if (props.formatPastedText) {
+                formatCodeAsync(lastInsertion.getStart(), lastInsertion.getEnd());
+            }
+            notifyIMEExternalCursorChange();
         }
     }
 
@@ -3394,23 +3547,35 @@ public class CodeEditor extends View implements ContentListener, Formatter.Forma
      *                       cursor is not in selection mode.
      */
     public void copyText(boolean shouldCopyLine) {
+        if (cursor.isSelected()) {
+            copyTextToClipboard(getText(), cursor.getLeft(), cursor.getRight());
+        } else if (shouldCopyLine) {
+            copyLine();
+        } else {
+            var text = getLineSeparator().getContent();
+            copyTextToClipboard(text, 0, text.length());
+        }
+    }
+
+    /**
+     * Copy the given text region to clipboard, and follow editor's IPC properties.
+     */
+    protected void copyTextToClipboard(@NonNull CharSequence text, int start, int end) {
+        if (end < start) {
+            return;
+        }
+        if (end - start > props.clipboardTextLengthLimit) {
+            Toast.makeText(getContext(), I18nConfig.getResourceId(R.string.sora_editor_clip_text_length_too_large), Toast.LENGTH_SHORT).show();
+            return;
+        }
         try {
-            if (cursor.isSelected()) {
-                int length = cursor.getRight() - cursor.getLeft();
-                if (length > props.clipboardTextLengthLimit) {
-                    Toast.makeText(getContext(), I18nConfig.getResourceId(R.string.sora_editor_clip_text_length_too_large), Toast.LENGTH_SHORT).show();
-                } else {
-                    var clip = getText().substring(cursor.getLeft(), cursor.getRight());
-                    clipboardManager.setPrimaryClip(ClipData.newPlainText(clip, clip));
-                }
-            } else if (shouldCopyLine) {
-                copyLine();
-            }
+            var clip = (text instanceof Content) ? ((Content) text).substring(start, end) : text.subSequence(start, end).toString();
+            clipboardManager.setPrimaryClip(ClipData.newPlainText(clip, clip));
         } catch (RuntimeException e) {
             if (e.getCause() instanceof TransactionTooLargeException) {
                 Toast.makeText(getContext(), I18nConfig.getResourceId(R.string.sora_editor_clip_text_length_too_large), Toast.LENGTH_SHORT).show();
             } else {
-                e.printStackTrace();
+                Log.w(LOG_TAG, e);
                 Toast.makeText(getContext(), e.getClass().toString(), Toast.LENGTH_SHORT).show();
             }
         }
@@ -3459,12 +3624,21 @@ public class CodeEditor extends View implements ContentListener, Formatter.Forma
         final var column = getText().getColumnCount(left.line);
 
         if (line + 1 == getLineCount()) {
+            int columnCount = getText().getColumnCount(line);
+            if (columnCount == 0) {
+                // copy line separator
+                copyText(false);
+                return;
+            }
             setSelectionRegion(line, 0, line, getText().getColumnCount(line));
         } else {
             setSelectionRegion(line, 0, line + 1, 0);
         }
 
         cutText();
+        if (props.placeSelOnPreviousLineAfterCut) {
+            moveSelection(SelectionMovement.LEFT);
+        }
     }
 
     /**
@@ -3545,7 +3719,6 @@ public class CodeEditor extends View implements ContentListener, Formatter.Forma
         final var start = range.getStart();
         final var end = range.getEnd();
         setSelectionRegion(start.line, start.column, end.line, end.column, SelectionChangeEvent.CAUSE_LONG_PRESS);
-        selectionAnchor = getCursor().left();
     }
 
     /**
@@ -3622,7 +3795,6 @@ public class CodeEditor extends View implements ContentListener, Formatter.Forma
 
         if (this.text != null) {
             this.text.removeContentListener(this);
-            this.text.setLineListener(null);
             this.text.resetBatchEdit();
         }
         this.extraArguments = extraArguments == null ? new Bundle() : extraArguments;
@@ -3638,10 +3810,11 @@ public class CodeEditor extends View implements ContentListener, Formatter.Forma
         styleDelegate.reset();
         textStyles = null;
         cursor = this.text.getCursor();
+        selectionAnchor = cursor.right();
         touchHandler.reset();
         this.text.addContentListener(this);
         this.text.setUndoEnabled(undoEnabled);
-        this.text.setLineListener(this);
+        renderContext.reset(this.text.getLineCount());
         renderer.onEditorFullTextUpdate();
 
         if (editorLanguage != null) {
@@ -3649,18 +3822,18 @@ public class CodeEditor extends View implements ContentListener, Formatter.Forma
             editorLanguage.getFormatter().cancel();
         }
 
-        dispatchEvent(new ContentChangeEvent(this, ContentChangeEvent.ACTION_SET_NEW_TEXT, new CharPosition(), this.text.getIndexer().getCharPosition(getLineCount() - 1, this.text.getColumnCount(getLineCount() - 1)), this.text));
+        dispatchEvent(new ContentChangeEvent(this, ContentChangeEvent.ACTION_SET_NEW_TEXT, new CharPosition(), this.text.getIndexer().getCharPosition(getLineCount() - 1, this.text.getColumnCount(getLineCount() - 1)), this.text, false));
+        createLayout();
         if (inputMethodManager != null) {
             inputMethodManager.restartInput(this);
         }
-        createLayout();
         requestLayout();
-        renderer.invalidateRenderNodes();
+        renderContext.invalidateRenderNodes();
         invalidate();
     }
 
     /**
-     * Set the editor's text size in sp unit. This value must be > 0
+     * Set the editor's text size in sp unit. This value must be greater than 0
      *
      * @param textSize the editor's text size in <strong>Sp</strong> units.
      */
@@ -3707,6 +3880,16 @@ public class CodeEditor extends View implements ContentListener, Formatter.Forma
     public <T extends
             Event> SubscriptionReceipt<T> subscribeEvent(Class<T> eventType, EventReceiver<T> receiver) {
         return eventManager.subscribeEvent(eventType, receiver);
+    }
+
+    /**
+     * Subscribe event of the given type, without {@link io.github.rosemoe.sora.event.Unsubscribe}.
+     *
+     * @see EventManager#subscribeEvent(Class, EventReceiver)
+     */
+    public <T extends
+            Event> SubscriptionReceipt<T> subscribeAlways(Class<T> eventType, EventManager.NoUnsubscribeReceiver<T> receiver) {
+        return eventManager.subscribeAlways(eventType, receiver);
     }
 
     /**
@@ -3818,6 +4001,40 @@ public class CodeEditor extends View implements ContentListener, Formatter.Forma
         setSelection(line, 0);
     }
 
+    /**
+     * Mark current selection position as a point of cursor range.
+     * When user taps to select another point in text, the text between the marked point and
+     * newly chosen point is selected.
+     *
+     * @see #isInLongSelect()
+     * @see #endLongSelect()
+     */
+    public void beginLongSelect() {
+        if (!isEditable()) {
+            return;
+        }
+        if (cursor.isSelected()) {
+            setSelection(cursor.getLeftLine(), cursor.getLeftColumn());
+        }
+        isInLongSelect = true;
+        invalidate();
+    }
+
+    /**
+     * Checks whether long select mode is started
+     */
+    public boolean isInLongSelect() {
+        return isInLongSelect;
+    }
+
+    /**
+     * Marks long select mode is end.
+     * This does nothing but set the flag to false.
+     */
+    public void endLongSelect() {
+        isInLongSelect = false;
+    }
+
 
     //-------------------------------------------------------------------------------
     //-------------------------IME Interaction---------------------------------------
@@ -3847,7 +4064,7 @@ public class CodeEditor extends View implements ContentListener, Formatter.Forma
         if (highlightCurrentBlock) {
             cursorPosition = findCursorBlock();
         }
-        renderer.invalidateRenderNodes();
+        renderContext.invalidateRenderNodes();
         renderer.updateTimestamp();
         invalidate();
     }
@@ -3861,7 +4078,7 @@ public class CodeEditor extends View implements ContentListener, Formatter.Forma
         if (highlightCurrentBlock) {
             cursorPosition = findCursorBlock();
         }
-        renderer.invalidateInRegion(range);
+        renderContext.updateForRange(range);
         renderer.updateTimestamp();
         invalidate();
     }
@@ -3900,13 +4117,16 @@ public class CodeEditor extends View implements ContentListener, Formatter.Forma
      */
     public void showSoftInput() {
         if (isEditable() && isEnabled()) {
+            // Note that we always try to get focused at this time.
             if (isInTouchMode() && !isFocused()) {
                 requestFocusFromTouch();
             }
             if (!isFocused()) {
                 requestFocus();
             }
-            inputMethodManager.showSoftInput(this, 0);
+
+            if (checkSoftInputEnabled())
+                inputMethodManager.showSoftInput(this, 0);
         }
         invalidate();
     }
@@ -3916,6 +4136,73 @@ public class CodeEditor extends View implements ContentListener, Formatter.Forma
      */
     public void hideSoftInput() {
         inputMethodManager.hideSoftInputFromWindow(getWindowToken(), 0);
+    }
+
+    /**
+     * Check whether the soft keyboard is enabled for this editor. Unlike {@link #isSoftKeyboardEnabled()},
+     * this method also checks whether a hardware keyboard is connected.
+     *
+     * @return Whether the editor should show soft keyboard.
+     * @see #isSoftKeyboardEnabled()
+     * @see #isDisableSoftKbdIfHardKbdAvailable()
+     */
+    protected boolean checkSoftInputEnabled() {
+        if (isDisableSoftKbdIfHardKbdAvailable()
+                && KeyboardUtils.INSTANCE.isHardKeyboardConnected(getContext())) {
+            return false;
+        }
+        return isSoftKeyboardEnabled();
+    }
+
+    /**
+     * Set whether the soft keyboard is enabled for this editor. Set to {@code true} by default.
+     *
+     * @param isEnabled Whether the soft keyboard is enabled.
+     */
+    public void setSoftKeyboardEnabled(boolean isEnabled) {
+        if (isSoftKeyboardEnabled() == isEnabled) {
+            // no need to do anything
+            return;
+        }
+
+        this.isSoftKbdEnabled = isEnabled;
+        hideSoftInput();
+        restartInput();
+    }
+
+    /**
+     * Returns whether the soft keyboard is enabled.
+     *
+     * @return Whether the soft keyboard is enabled.
+     */
+    public boolean isSoftKeyboardEnabled() {
+        return this.isSoftKbdEnabled;
+    }
+
+    /**
+     * Set whether the soft keyboard should be disabled for this editor if a hardware keyboard is
+     * connected to the device. Set to {@code true} by default.
+     *
+     * @param isDisabled Whether the soft keyboard should be enabled if hardware keyboard is connected.
+     */
+    public void setDisableSoftKbdIfHardKbdAvailable(boolean isDisabled) {
+        if (isDisableSoftKbdIfHardKbdAvailable() == isDisabled) {
+            // no need to do anything
+            return;
+        }
+
+        this.isDisableSoftKbdOnHardKbd = isDisabled;
+        hideSoftInput();
+        restartInput();
+    }
+
+    /**
+     * Returns whether the soft keyboard should be enabled if hardware keyboard is connected.
+     *
+     * @return Whether the soft keyboard should be enabled if hardware keyboard is connected.
+     */
+    public boolean isDisableSoftKbdIfHardKbdAvailable() {
+        return isDisableSoftKbdOnHardKbd;
     }
 
     /**
@@ -3968,7 +4255,7 @@ public class CodeEditor extends View implements ContentListener, Formatter.Forma
      * Extract text in editor for input method
      */
     protected ExtractedText extractText(@NonNull ExtractedTextRequest request) {
-        if (getProps().disallowSuggestions) {
+        if (getProps().disallowSuggestions || getProps().disableTextExtracting) {
             return null;
         }
         Cursor cur = getCursor();
@@ -4042,9 +4329,10 @@ public class CodeEditor extends View implements ContentListener, Formatter.Forma
         hideEditorWindows();
         if (!released) {
             dispatchEvent(new EditorReleaseEvent(this));
+        } else {
+            return;
         }
         released = true;
-        completionWindow.cancelCompletion();
         if (editorLanguage != null) {
             editorLanguage.getAnalyzeManager().destroy();
             var formatter = editorLanguage.getFormatter();
@@ -4053,10 +4341,15 @@ public class CodeEditor extends View implements ContentListener, Formatter.Forma
             editorLanguage.destroy();
             editorLanguage = new EmptyLanguage();
         }
+
+        // avoid access to language related after releasing
+        textStyles = null;
+        diagnostics = null;
+        styleDelegate.reset();
+
         final var text = this.text;
         if (text != null) {
             text.removeContentListener(this);
-            text.setLineListener(null);
         }
         colorScheme.detachEditor(this);
     }
@@ -4074,6 +4367,7 @@ public class CodeEditor extends View implements ContentListener, Formatter.Forma
      */
     public void hideEditorWindows() {
         completionWindow.cancelCompletion();
+        completionWindow.hide();
         textActionWindow.dismiss();
         touchHandler.magnifier.dismiss();
     }
@@ -4085,7 +4379,7 @@ public class CodeEditor extends View implements ContentListener, Formatter.Forma
      */
     public void onColorUpdated(int type) {
         dispatchEvent(new ColorSchemeUpdateEvent(this));
-        renderer.invalidateRenderNodes();
+        renderContext.invalidateRenderNodes();
         invalidate();
     }
 
@@ -4094,7 +4388,7 @@ public class CodeEditor extends View implements ContentListener, Formatter.Forma
      */
     public void onColorFullUpdate() {
         dispatchEvent(new ColorSchemeUpdateEvent(this));
-        renderer.invalidateRenderNodes();
+        renderContext.invalidateRenderNodes();
         invalidate();
     }
 
@@ -4125,9 +4419,20 @@ public class CodeEditor extends View implements ContentListener, Formatter.Forma
      * Called when the text is edited or {@link CodeEditor#setSelection} is called
      */
     protected void onSelectionChanged(int cause) {
-        dispatchEvent(new SelectionChangeEvent(this, cause));
+        CharPosition oldLeft = null;
+        CharPosition oldRight = null;
+        final TextRange lastTextRange = this.lastSelectedTextRange;
+        if (lastTextRange != null) {
+            oldLeft = lastTextRange.getStart();
+            oldRight = lastTextRange.getEnd();
+        }
+        dispatchEvent(new SelectionChangeEvent(this, oldLeft, oldRight, cause));
+        this.lastSelectedTextRange = getCursorRange();
     }
 
+    /**
+     * Release active edge effects on thumbs up
+     */
     protected void releaseEdgeEffects() {
         edgeEffectHorizontal.onRelease();
         edgeEffectVertical.onRelease();
@@ -4137,7 +4442,7 @@ public class CodeEditor extends View implements ContentListener, Formatter.Forma
     //-------------------------Override methods--------------------------------------
     //-------------------------------------------------------------------------------
     @Override
-    protected void onDraw(Canvas canvas) {
+    protected void onDraw(@NonNull Canvas canvas) {
         super.onDraw(canvas);
 
         renderer.draw(canvas);
@@ -4197,33 +4502,41 @@ public class CodeEditor extends View implements ContentListener, Formatter.Forma
     @Override
     public boolean performAccessibilityAction(int action, Bundle arguments) {
         switch (action) {
-            case AccessibilityNodeInfo.ACTION_COPY:
+            case AccessibilityNodeInfo.ACTION_COPY -> {
                 copyText();
                 return true;
-            case AccessibilityNodeInfo.ACTION_CUT:
+            }
+            case AccessibilityNodeInfo.ACTION_CUT -> {
                 cutText();
                 return true;
-            case AccessibilityNodeInfo.ACTION_PASTE:
+            }
+            case AccessibilityNodeInfo.ACTION_PASTE -> {
                 pasteText();
                 return true;
-            case AccessibilityNodeInfo.ACTION_SET_TEXT:
+            }
+            case AccessibilityNodeInfo.ACTION_SET_TEXT -> {
                 setText(arguments.getCharSequence(AccessibilityNodeInfo.ACTION_ARGUMENT_SET_TEXT_CHARSEQUENCE));
                 return true;
-            case AccessibilityNodeInfo.ACTION_SCROLL_BACKWARD:
-                movePageDown();
+            }
+            case AccessibilityNodeInfo.ACTION_SCROLL_BACKWARD -> {
+                moveSelection(SelectionMovement.PAGE_DOWN);
                 return true;
-            case AccessibilityNodeInfo.ACTION_SCROLL_FORWARD:
-                movePageUp();
+            }
+            case AccessibilityNodeInfo.ACTION_SCROLL_FORWARD -> {
+                moveSelection(SelectionMovement.PAGE_UP);
                 return true;
+            }
         }
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
             switch (action) {
-                case android.R.id.accessibilityActionScrollDown:
-                    movePageDown();
+                case android.R.id.accessibilityActionScrollDown -> {
+                    moveSelection(SelectionMovement.PAGE_UP);
                     return true;
-                case android.R.id.accessibilityActionScrollUp:
-                    movePageUp();
+                }
+                case android.R.id.accessibilityActionScrollUp -> {
+                    moveSelection(SelectionMovement.PAGE_DOWN);
                     return true;
+                }
             }
         }
         return super.performAccessibilityAction(action, arguments);
@@ -4238,13 +4551,13 @@ public class CodeEditor extends View implements ContentListener, Formatter.Forma
     public boolean dispatchTouchEvent(MotionEvent event) {
         int x = (int) event.getX();
         switch (event.getAction()) {
-            case MotionEvent.ACTION_DOWN:
+            case MotionEvent.ACTION_DOWN -> {
                 downX = x;
                 if (forceHorizontalScrollable) {
                     getParent().requestDisallowInterceptTouchEvent(true);
                 }
-                break;
-            case MotionEvent.ACTION_MOVE:
+            }
+            case MotionEvent.ACTION_MOVE -> {
                 int deltaX = x - downX;
                 if (forceHorizontalScrollable && !touchHandler.hasAnyHeldHandle()) {
                     if (deltaX > 0 && getScroller().getCurrX() == 0
@@ -4252,7 +4565,7 @@ public class CodeEditor extends View implements ContentListener, Formatter.Forma
                         getParent().requestDisallowInterceptTouchEvent(false);
                     }
                 }
-                break;
+            }
         }
         return super.dispatchTouchEvent(event);
     }
@@ -4267,7 +4580,11 @@ public class CodeEditor extends View implements ContentListener, Formatter.Forma
         if (!isEditable() || !isEnabled()) {
             return null;
         }
-        outAttrs.inputType = inputType != 0 ? inputType : EditorInfo.TYPE_CLASS_TEXT | EditorInfo.TYPE_TEXT_FLAG_MULTI_LINE;
+        if (checkSoftInputEnabled()) {
+            outAttrs.inputType = inputType != 0 ? inputType : EditorInfo.TYPE_CLASS_TEXT | EditorInfo.TYPE_TEXT_FLAG_MULTI_LINE;
+        } else {
+            outAttrs.inputType = InputType.TYPE_NULL;
+        }
         outAttrs.initialSelStart = getCursor() != null ? getCursor().getLeft() : 0;
         outAttrs.initialSelEnd = getCursor() != null ? getCursor().getRight() : 0;
         outAttrs.initialCapsMode = inputConnection.getCursorCapsMode(0);
@@ -4285,11 +4602,50 @@ public class CodeEditor extends View implements ContentListener, Formatter.Forma
         return inputConnection;
     }
 
+    @Override
+    public PointerIcon onResolvePointerIcon(MotionEvent event, int pointerIndex) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+            if (event.isFromSource(InputDevice.SOURCE_MOUSE)) {
+                if (isFormatting()) {
+                    return PointerIcon.getSystemIcon(getContext(), PointerIcon.TYPE_WAIT);
+                }
+                if (touchHandler.hasAnyHeldHandle()) {
+                    return PointerIcon.getSystemIcon(getContext(), PointerIcon.TYPE_GRABBING);
+                }
+                if (getLeftHandleDescriptor().position.contains(event.getX(), event.getY())
+                        || getRightHandleDescriptor().position.contains(event.getX(), event.getY())
+                        || getInsertHandleDescriptor().position.contains(event.getX(), event.getY())) {
+                    return PointerIcon.getSystemIcon(getContext(), PointerIcon.TYPE_GRAB);
+                }
+                var res = RegionResolverKt.resolveTouchRegion(this, event, pointerIndex);
+                var region = IntPair.getFirst(res);
+                var inbound = IntPair.getSecond(res) == RegionResolverKt.IN_BOUND;
+                if (region == RegionResolverKt.REGION_TEXT && inbound) {
+                    if (touchHandler.mouseCanMoveText && !touchHandler.mouseClick) {
+                        return PointerIcon.getSystemIcon(getContext(), PointerIcon.TYPE_GRABBING);
+                    }
+                    return PointerIcon.getSystemIcon(getContext(), PointerIcon.TYPE_TEXT);
+                } else if (region == RegionResolverKt.REGION_LINE_NUMBER) {
+                    switch (props.actionWhenLineNumberClicked) {
+                        case DirectAccessProps.LN_ACTION_SELECT_LINE, DirectAccessProps.LN_ACTION_PLACE_SELECTION_HOME -> {
+                            return PointerIcon.getSystemIcon(getContext(), PointerIcon.TYPE_HAND);
+                        }
+                    }
+                }
+                return super.onResolvePointerIcon(event, pointerIndex);
+            }
+        }
+        return super.onResolvePointerIcon(event, pointerIndex);
+    }
+
     @SuppressLint("ClickableViewAccessibility")
     @Override
     public boolean onTouchEvent(MotionEvent event) {
         if (!isEnabled()) {
             return false;
+        }
+        if (event.isFromSource(InputDevice.SOURCE_MOUSE) && props.mouseMode != DirectAccessProps.MOUSE_MODE_NEVER) {
+            return touchHandler.onMouseEvent(event);
         }
         if (isFormatting()) {
             touchHandler.reset2();
@@ -4355,16 +4711,94 @@ public class CodeEditor extends View implements ContentListener, Formatter.Forma
     }
 
     @Override
+    public boolean onDragEvent(DragEvent event) {
+        switch (event.getAction()) {
+            case DragEvent.ACTION_DRAG_STARTED -> {
+                return true;
+            }
+            case DragEvent.ACTION_DRAG_LOCATION -> {
+                var pos = getPointPositionOnScreen(event.getX(), event.getY());
+                int line = IntPair.getFirst(pos), column = IntPair.getSecond(pos);
+                touchHandler.draggingSelection = getText().getIndexer().getCharPosition(line, column);
+                postInvalidate();
+                touchHandler.scrollIfReachesEdge(null, event.getX(), event.getY());
+                return true;
+            }
+            case DragEvent.ACTION_DRAG_EXITED -> {
+                touchHandler.draggingSelection = null;
+                postInvalidate();
+                return true;
+            }
+            case DragEvent.ACTION_DROP -> {
+                var targetPos = touchHandler.draggingSelection;
+                if (targetPos == null) {
+                    return false;
+                }
+                touchHandler.draggingSelection = null;
+                setSelection(targetPos.line, targetPos.column);
+                pasteText(ClipDataUtils.clipDataToString(event.getClipData()));
+                requestFocus();
+                postInvalidate();
+                // Call super for notifying listeners
+                super.onDragEvent(event);
+                return true;
+            }
+        }
+        return super.onDragEvent(event);
+    }
+
+    @Override
+    protected void onCreateContextMenu(ContextMenu menu) {
+        super.onCreateContextMenu(menu);
+        final var pos = touchHandler.getLastContextClickPosition();
+        if (pos == null) {
+            return;
+        }
+        var charPos = getPointPositionOnScreen(pos.x, pos.y);
+        dispatchEvent(new CreateContextMenuEvent(this, menu, text.getIndexer().getCharPosition(IntPair.getFirst(charPos), IntPair.getSecond(charPos))));
+    }
+
+    @Override
+    protected void onConfigurationChanged(Configuration newConfig) {
+        super.onConfigurationChanged(newConfig);
+        touchHandler.resetMouse();
+        mouseHover = mouseButtonPressed = false;
+    }
+
+    @Override
     public boolean onGenericMotionEvent(MotionEvent event) {
-        if (event.getAction() == MotionEvent.ACTION_SCROLL && event.isFromSource(InputDevice.SOURCE_CLASS_POINTER)) {
+        if (event.isFromSource(InputDevice.SOURCE_MOUSE)) {
+            if (event.getAction() == MotionEvent.ACTION_HOVER_ENTER) {
+                mouseHover = true;
+            } else if (event.getAction() == MotionEvent.ACTION_HOVER_EXIT) {
+                mouseHover = false;
+            }
+            if (event.getActionMasked() == MotionEvent.ACTION_BUTTON_PRESS
+                    || event.getActionMasked() == MotionEvent.ACTION_BUTTON_RELEASE) {
+                mouseButtonPressed = event.getButtonState() != 0;
+            }
+            switch (event.getAction()) {
+                case MotionEvent.ACTION_HOVER_ENTER:
+                case MotionEvent.ACTION_HOVER_MOVE:
+                case MotionEvent.ACTION_HOVER_EXIT:
+                    touchHandler.dispatchEditorMotionEvent(HoverEvent::new, null, event);
+                    return true;
+            }
+        }
+        if (event.getAction() == MotionEvent.ACTION_SCROLL && event.isFromSource(InputDevice.SOURCE_CLASS_POINTER) && !keyEventHandler.getKeyMetaStates().isCtrlPressed()) {
             float v_scroll = -event.getAxisValue(MotionEvent.AXIS_VSCROLL);
             float h_scroll = -event.getAxisValue(MotionEvent.AXIS_HSCROLL);
-            float distanceX = h_scroll * verticalScrollFactor;
-            float distanceY = v_scroll * verticalScrollFactor;
+            float distanceX = h_scroll * verticalScrollFactor * props.mouseWheelScrollFactor;
+            float distanceY = v_scroll * verticalScrollFactor * props.mouseWheelScrollFactor;
             if (keyEventHandler.getKeyMetaStates().isAltPressed()) {
                 float multiplier = props.fastScrollSensitivity;
                 distanceX *= multiplier;
                 distanceY *= multiplier;
+            }
+            if (keyEventHandler.getKeyMetaStates().isShiftPressed()) {
+                float tmp = distanceX;
+                distanceX = distanceY;
+                distanceY = tmp;
             }
             touchHandler.onScroll(event, event, distanceX, distanceY);
             return true;
@@ -4395,8 +4829,15 @@ public class CodeEditor extends View implements ContentListener, Formatter.Forma
     @Override
     protected void onDetachedFromWindow() {
         super.onDetachedFromWindow();
+        dispatchEvent(new EditorAttachStateChangeEvent(this, false));
         cursorBlink.valid = false;
         removeCallbacks(cursorBlink);
+    }
+
+    @Override
+    protected void onAttachedToWindow() {
+        super.onAttachedToWindow();
+        dispatchEvent(new EditorAttachStateChangeEvent(this, true));
     }
 
     @Override
@@ -4411,11 +4852,10 @@ public class CodeEditor extends View implements ContentListener, Formatter.Forma
         } else {
             cursorBlink.valid = false;
             cursorBlink.visibility = false;
-            completionWindow.hide();
-            textActionWindow.dismiss();
             touchHandler.hideInsertHandle();
             removeCallbacks(cursorBlink);
         }
+        dispatchEvent(new EditorFocusChangeEvent(this, gainFocus));
         invalidate();
     }
 
@@ -4533,6 +4973,7 @@ public class CodeEditor extends View implements ContentListener, Formatter.Forma
     @Override
     public void afterInsert(@NonNull Content content, int startLine, int startColumn, int endLine,
                             int endColumn, @NonNull CharSequence insertedContent) {
+        renderContext.updateForInsertion(startLine, endLine);
         renderer.updateTimestamp();
         styleDelegate.onTextChange();
         var start = text.getIndexer().getCharPosition(startLine, startColumn);
@@ -4558,41 +4999,25 @@ public class CodeEditor extends View implements ContentListener, Formatter.Forma
         updateCursor();
         waitForNextChange = false;
 
-        // Auto completion
-        var needCompletion = false;
-        if (completionWindow.isEnabled() && !text.isUndoManagerWorking()) {
-            if ((!inputConnection.composingText.isComposing() || props.autoCompletionOnComposing) && endColumn != 0 && startLine == endLine) {
-                needCompletion = true;
-            } else {
-                completionWindow.hide();
-            }
-            updateCompletionWindowPosition(completionWindow.isShowing());
-        } else {
-            completionWindow.hide();
-        }
-
-        //Log.d(LOG_TAG, "Ins: " + startLine + " " + startColumn + ", " + endLine + " " + endColumn + ", content = " + insertedContent);
         updateCursorAnchor();
-        renderer.invalidateOnInsert(startLine, endLine);
         ensureSelectionVisible();
 
         editorLanguage.getAnalyzeManager().insert(start, end, insertedContent);
         touchHandler.hideInsertHandle();
-        if (editable && !cursor.isSelected() && !inputConnection.composingText.isComposing() && !completionWindow.shouldRejectComposing()) {
+        if (editable && !cursor.isSelected() && !inputConnection.composingText.isComposing() && acceptsComposingText()) {
             cursorAnimator.markEndPos();
             cursorAnimator.start();
         }
-        dispatchEvent(new ContentChangeEvent(this, ContentChangeEvent.ACTION_INSERT, start, end, insertedContent));
+        selectionAnchor = lastAnchorIsSelLeft ? cursor.left() : cursor.right();
+        dispatchEvent(new ContentChangeEvent(this, ContentChangeEvent.ACTION_INSERT, start, end, insertedContent, text.isUndoManagerWorking()));
         onSelectionChanged(SelectionChangeEvent.CAUSE_TEXT_MODIFICATION);
         lastInsertion = new TextRange(start.fromThis(), end.fromThis());
-        if (needCompletion) {
-            completionWindow.requireCompletion();
-        }
     }
 
     @Override
     public void afterDelete(@NonNull Content content, int startLine, int startColumn, int endLine,
                             int endColumn, @NonNull CharSequence deletedContent) {
+        renderContext.updateForDeletion(startLine, endLine);
         renderer.updateTimestamp();
         styleDelegate.onTextChange();
         var start = text.getIndexer().getCharPosition(startLine, startColumn);
@@ -4618,42 +5043,25 @@ public class CodeEditor extends View implements ContentListener, Formatter.Forma
 
         updateCursor();
 
-        var needCompletion = false;
-        if (completionWindow.isEnabled() && !text.isUndoManagerWorking()) {
-            if (!inputConnection.composingText.isComposing() && completionWindow.isShowing()) {
-                if (startLine != endLine || startColumn != endColumn - 1) {
-                    completionWindow.hide();
-                } else {
-                    needCompletion = true;
-                    updateCompletionWindowPosition();
-                }
-            }
-        } else {
-            completionWindow.hide();
-        }
-
-        //Log.d(LOG_TAG, "Del: " + startLine + " " + startColumn + ", " + endLine + " " + endColumn + ", content = " + deletedContent);
-        renderer.invalidateOnDelete(startLine, endLine);
         if (!waitForNextChange) {
             updateCursorAnchor();
             ensureSelectionVisible();
             touchHandler.hideInsertHandle();
         }
-        if (editable && !cursor.isSelected() && !waitForNextChange && !inputConnection.composingText.isComposing() && !completionWindow.shouldRejectComposing()) {
+        if (editable && !cursor.isSelected() && !waitForNextChange && !inputConnection.composingText.isComposing() && acceptsComposingText()) {
             cursorAnimator.markEndPos();
             cursorAnimator.start();
         }
         editorLanguage.getAnalyzeManager().delete(start, end, deletedContent);
-        dispatchEvent(new ContentChangeEvent(this, ContentChangeEvent.ACTION_DELETE, start, end, deletedContent));
+        selectionAnchor = lastAnchorIsSelLeft ? cursor.left() : cursor.right();
+        dispatchEvent(new ContentChangeEvent(this, ContentChangeEvent.ACTION_DELETE, start, end, deletedContent, text.isUndoManagerWorking()));
         onSelectionChanged(SelectionChangeEvent.CAUSE_TEXT_MODIFICATION);
-        if (needCompletion) {
-            completionWindow.requireCompletion();
-        }
     }
 
     @Override
     public void beforeModification(@NonNull Content content) {
         cursorAnimator.markStartPos();
+        lastAnchorIsSelLeft = cursor.left().equals(selectionAnchor);
     }
 
     @Override
@@ -4670,8 +5078,7 @@ public class CodeEditor extends View implements ContentListener, Formatter.Forma
                     text.getColumnCount(text.getLineCount() - 1));
             text.insert(0, 0, string);
             text.endBatchEdit();
-            completionWindow.hide();
-            inputConnection.invalid();
+            inputConnection.markInvalid();
             if (cursorRange == null) {
                 setSelectionAround(line, column);
             } else {
@@ -4680,7 +5087,7 @@ public class CodeEditor extends View implements ContentListener, Formatter.Forma
                     var end = cursorRange.getEnd();
                     setSelectionRegion(start.line, start.column, end.line, end.column);
                 } catch (IndexOutOfBoundsException e) {
-                    e.printStackTrace();
+                    Log.w(LOG_TAG, e);
                 }
             }
             getScroller().forceFinished(true);
@@ -4690,17 +5097,16 @@ public class CodeEditor extends View implements ContentListener, Formatter.Forma
             touchHandler.scrollBy(0, 0);
             inputConnection.reset();
             restartInput();
+            dispatchEvent(new EditorFormatEvent(this, true));
         });
     }
 
     @Override
     public void onFormatFail(final Throwable throwable) {
-        postInLifecycle(() -> Toast.makeText(getContext(), "Format:" + throwable, Toast.LENGTH_SHORT).show());
-    }
-
-    @Override
-    public void onRemove(@NonNull Content content, @NonNull ContentLine line) {
-        layout.onRemove(content, line);
+        postInLifecycle(() -> {
+            Toast.makeText(getContext(), "Format:" + throwable, Toast.LENGTH_SHORT).show();
+            dispatchEvent(new EditorFormatEvent(this, false));
+        });
     }
 
 }

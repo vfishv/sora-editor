@@ -1,7 +1,7 @@
 /*
  *    sora-editor - the awesome code editor for Android
  *    https://github.com/Rosemoe/sora-editor
- *    Copyright (C) 2020-2023  Rosemoe
+ *    Copyright (C) 2020-2024  Rosemoe
  *
  *     This library is free software; you can redistribute it and/or
  *     modify it under the terms of the GNU Lesser General Public
@@ -48,12 +48,11 @@ import io.github.rosemoe.sora.text.ComposingText;
 import io.github.rosemoe.sora.text.Content;
 import io.github.rosemoe.sora.text.Cursor;
 import io.github.rosemoe.sora.util.Logger;
-import io.github.rosemoe.sora.widget.component.EditorAutoCompletion;
 
 /**
  * Connection between input method and editor
  *
- * @author Rose
+ * @author Rosemoe
  */
 class EditorInputConnection extends BaseInputConnection {
 
@@ -82,7 +81,7 @@ class EditorInputConnection extends BaseInputConnection {
         });
     }
 
-    protected void invalid() {
+    protected void markInvalid() {
         connectionInvalid = true;
         composingText.reset();
         resetBatchEdit();
@@ -286,72 +285,9 @@ class EditorInputConnection extends BaseInputConnection {
         } else if (composingText.isComposing()) {
             deleteComposingText();
         }
-        // replace text
-        SymbolPairMatch.SymbolPair pair = null;
-        if (editor.getProps().symbolPairAutoCompletion && text.length() > 0) {
-            var firstCharFromText = text.charAt(0);
 
-            char[] inputText = null;
+        editor.commitText(text, applyAutoIndent);
 
-            //size > 1
-            if (text.length() > 1) {
-                inputText = text.toString().toCharArray();
-            }
-
-            pair = editor.languageSymbolPairs.matchBestPair(
-                    editor.getText(), editor.getCursor().left(),
-                    inputText, firstCharFromText
-            );
-        }
-        var editorText = editor.getText();
-        var editorCursor = editor.getCursor();
-
-        // newCursorPosition ignored
-        // Call onCommitText() can make auto indent and delete text selected automatically
-        if (pair == null || pair == SymbolPairMatch.SymbolPair.EMPTY_SYMBOL_PAIR
-                || (pair.shouldNotReplace(editor))) {
-            editor.commitText(text, applyAutoIndent);
-        } else {
-
-            // QuickQuoteHandler can easily implement the feature of AutoSurround
-            // and is at a higher level (customizable),
-            // so if the language implemented QuickQuoteHandler,
-            // the AutoSurround feature is not considered needed because it can be implemented through QuickQuoteHandler
-
-            if (pair.shouldDoAutoSurround(editorText) && editor.getEditorLanguage().getQuickQuoteHandler() == null) {
-
-                editorText.beginBatchEdit();
-                // insert left
-                editorText.insert(editorCursor.getLeftLine(), editorCursor.getLeftColumn(), pair.open);
-                // editorText.insert(editorCursor.getLeftLine(),editorCursor.getLeftColumn(),selectText);
-                // insert right
-                editorText.insert(editorCursor.getRightLine(), editorCursor.getRightColumn(), pair.close);
-                editorText.endBatchEdit();
-
-                // setSelection
-                editor.setSelectionRegion(editorCursor.getLeftLine(), editorCursor.getLeftColumn(),
-                        editorCursor.getRightLine(), editorCursor.getRightColumn() - pair.close.length());
-            } else if (editorCursor.isSelected() && editor.getEditorLanguage().getQuickQuoteHandler() != null) {
-                editor.commitText(text,applyAutoIndent);
-            } else {
-                editorText.beginBatchEdit();
-
-                var insertPosition = editorText
-                        .getIndexer()
-                        .getCharPosition(pair.getInsertOffset());
-
-                editorText.replace(insertPosition.line, insertPosition.column,
-                        editorCursor.getRightLine(), editorCursor.getRightColumn(), pair.open);
-                editorText.insert(insertPosition.line, insertPosition.column + pair.open.length(), pair.close);
-                editorText.endBatchEdit();
-
-                var cursorPosition = editorText
-                        .getIndexer()
-                        .getCharPosition(pair.getCursorOffset());
-
-                editor.setSelection(cursorPosition.line, cursorPosition.column);
-            }
-        }
         if (composingStateBefore) {
             endBatchEdit();
         }
@@ -472,15 +408,11 @@ class EditorInputConnection extends BaseInputConnection {
         }
     }
 
-    private boolean shouldRejectComposing() {
-        return editor.getComponent(EditorAutoCompletion.class).shouldRejectComposing();
-    }
-
     @Override
     public boolean setComposingText(CharSequence text, int newCursorPosition) {
         if (DEBUG)
             logger.d("setComposingText, text = " + text + ", pos = " + newCursorPosition);
-        if (!editor.isEditable() || connectionInvalid || shouldRejectComposing()) {
+        if (!editor.isEditable() || connectionInvalid || !editor.acceptsComposingText()) {
             return false;
         }
         if (editor.getProps().disallowSuggestions) {
@@ -578,7 +510,6 @@ class EditorInputConnection extends BaseInputConnection {
         if (start == getCursor().getLeft() && end == getCursor().getRight()) {
             return true;
         }
-        editor.getComponent(EditorAutoCompletion.class).hide();
         Content content = editor.getText();
         CharPosition startPos = content.getIndexer().getCharPosition(start);
         CharPosition endPos = content.getIndexer().getCharPosition(end);
@@ -590,7 +521,7 @@ class EditorInputConnection extends BaseInputConnection {
     public boolean setComposingRegion(int start, int end) {
         if (DEBUG)
             logger.d("setComposingRegion, s = " + start + ", e = " + end);
-        if (!editor.isEditable() || connectionInvalid || shouldRejectComposing() || editor.getProps().disallowSuggestions) {
+        if (!editor.isEditable() || connectionInvalid || !editor.acceptsComposingText() || editor.getProps().disallowSuggestions) {
             return false;
         }
         if (start == end) {
@@ -662,7 +593,7 @@ class EditorInputConnection extends BaseInputConnection {
     public ExtractedText getExtractedText(ExtractedTextRequest request, int flags) {
         if (DEBUG)
             logger.d("getExtractedText, flags = " + flags);
-        if (editor.getProps().disallowSuggestions) {
+        if (editor.getProps().disallowSuggestions || editor.getProps().disableTextExtracting) {
             return null;
         }
         if ((flags & GET_EXTRACTED_TEXT_MONITOR) != 0) {

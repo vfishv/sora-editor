@@ -14,7 +14,6 @@ package org.eclipse.tm4e.core.internal.theme;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
-import java.util.Locale;
 import java.util.Map;
 
 import org.eclipse.jdt.annotation.Nullable;
@@ -22,12 +21,12 @@ import org.eclipse.tm4e.core.TMException;
 
 /**
  * @see <a href=
- *      "https://github.com/microsoft/vscode-textmate/blob/e8d1fc5d04b2fc91384c7a895f6c9ff296a38ac8/src/theme.ts#L358">
+ *      "https://github.com/microsoft/vscode-textmate/blob/88baacf1a6637c5ec08dce18cea518d935fcf0a0/src/theme.ts#L385">
  *      github.com/microsoft/vscode-textmate/blob/main/src/theme.ts</a>
  */
 public final class ColorMap {
 
-    private boolean _isFrozen;
+    private final boolean _isFrozen;
     private int _lastColorId = -1; // -1 and not 0 as in upstream project on purpose
     private final List<String> _id2color = new ArrayList<>();
     private final Map<String /*color*/, @Nullable Integer /*ID color*/> _color2id = new LinkedHashMap<>();
@@ -48,16 +47,17 @@ public final class ColorMap {
         }
     }
 
-
+    // old version method
     public String getColor(int id) {
         return _id2color.get(id);
     }
+
 
     public int getId(@Nullable final String _color) {
         if (_color == null) {
             return 0;
         }
-        final var color = _color.toUpperCase(Locale.ROOT);
+        final var color = _color.toUpperCase();
         Integer value = _color2id.get(color);
         if (value != null) {
             return value;
@@ -75,33 +75,22 @@ public final class ColorMap {
         return value;
     }
 
-
     public List<String> getColorMap() {
         return new ArrayList<>(_color2id.keySet());
     }
 
     @Override
     public boolean equals(@Nullable final Object obj) {
-        if (this == obj) {
+        if (this == obj)
             return true;
-        }
-        if (obj == null) {
-            return false;
-        }
-        if (getClass() != obj.getClass()) {
-            return false;
-        }
-        final ColorMap other = (ColorMap) obj;
-        return _lastColorId == other._lastColorId
-                && _color2id.equals(other._color2id);
+        if (obj instanceof final ColorMap other)
+            return _lastColorId == other._lastColorId
+                    && _color2id.equals(other._color2id);
+        return false;
     }
 
     @Override
     public int hashCode() {
-        final int prime = 31;
-        int result = 1;
-        result = prime * result + _lastColorId;
-        result = prime * result + _color2id.hashCode();
-        return result;
+        return 31 * (31 + _lastColorId) + _color2id.hashCode();
     }
 }

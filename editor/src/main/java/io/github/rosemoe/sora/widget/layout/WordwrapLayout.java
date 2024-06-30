@@ -1,7 +1,7 @@
 /*
  *    sora-editor - the awesome code editor for Android
  *    https://github.com/Rosemoe/sora-editor
- *    Copyright (C) 2020-2023  Rosemoe
+ *    Copyright (C) 2020-2024  Rosemoe
  *
  *     This library is free software; you can redistribute it and/or
  *     modify it under the terms of the GNU Lesser General Public
@@ -33,6 +33,7 @@ import java.util.Collections;
 import java.util.List;
 import java.util.NoSuchElementException;
 
+import io.github.rosemoe.sora.graphics.CharPosDesc;
 import io.github.rosemoe.sora.graphics.Paint;
 import io.github.rosemoe.sora.text.Content;
 import io.github.rosemoe.sora.text.ContentLine;
@@ -177,10 +178,10 @@ public class WordwrapLayout extends AbstractLayout {
     private void breakLine(int line, ContentLine sequence, List<Integer> breakpoints, @Nullable Paint paint) {
         int start = 0;
         int len = sequence.length();
-        var text = sequence.value;
+        var text = sequence.getBackingCharArray();
 
         while (start < len) {
-            var next = (int) editor.getRenderer().findFirstVisibleCharForWordwrap(width, line, start, len, 0, paint == null ? editor.getTextPaint() : paint)[0];
+            var next = CharPosDesc.getTextOffset(editor.getRenderer().findFirstVisibleCharForWordwrap(width, line, start, len, 0, paint == null ? editor.getTextPaint() : paint));
             // Force to break the text, though no space is available
             if (next == start) {
                 next++;
@@ -197,7 +198,7 @@ public class WordwrapLayout extends AbstractLayout {
             breakpoints.add(next);
             start = next;
         }
-        if (breakpoints.size() != 0 && breakpoints.get(breakpoints.size() - 1) == sequence.length()) {
+        if (!breakpoints.isEmpty() && breakpoints.get(breakpoints.size() - 1) == sequence.length()) {
             breakpoints.remove(breakpoints.size() - 1);
         }
     }

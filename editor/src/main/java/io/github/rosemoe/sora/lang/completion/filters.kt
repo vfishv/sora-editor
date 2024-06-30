@@ -1,7 +1,7 @@
 /*******************************************************************************
  *    sora-editor - the awesome code editor for Android
  *    https://github.com/Rosemoe/sora-editor
- *    Copyright (C) 2020-2023  Rosemoe
+ *    Copyright (C) 2020-2024  Rosemoe
  *
  *     This library is free software; you can redistribute it and/or
  *     modify it under the terms of the GNU Lesser General Public
@@ -57,19 +57,19 @@ fun isPatternInWord(
     wordLen: Int,
     fillMinWordPosArr: Boolean = false
 ): Boolean {
-    var patternPos = patternPos
-    var wordPos = wordPos
-    while (patternPos < patternLen && wordPos < wordLen) {
-        if (patternLow[patternPos] == wordLow[wordPos]) {
+    var patternPosMut = patternPos
+    var wordPosMut = wordPos
+    while (patternPosMut < patternLen && wordPosMut < wordLen) {
+        if (patternLow[patternPosMut] == wordLow[wordPosMut]) {
             if (fillMinWordPosArr) {
                 // Remember the min word position for each pattern position
-                minWordMatchPosArray[patternPos] = wordPos
+                minWordMatchPosArray[patternPosMut] = wordPosMut
             }
-            patternPos += 1
+            patternPosMut += 1
         }
-        wordPos += 1
+        wordPosMut += 1
     }
-    return patternPos == patternLen // pattern must be exhausted
+    return patternPosMut == patternLen // pattern must be exhausted
 }
 
 
@@ -178,8 +178,6 @@ data class FuzzyScoreOptions(
     companion object {
         @JvmStatic
         val default = FuzzyScoreOptions(boostFullMatch = true, firstMatchCanBeWeak = false)
-
-
     }
 
 }
@@ -205,16 +203,16 @@ fun anyScore(
     wordPos: Int,
 ): FuzzyScore {
     val max = 13.coerceAtMost(pattern.length)
-    var patternPos = patternPos
-    while (patternPos < max) {
+    var patternPosMut = patternPos
+    while (patternPosMut < max) {
         val result = fuzzyScore(
-            pattern, lowPattern, patternPos, word, lowWord, wordPos,
+            pattern, lowPattern, patternPosMut, word, lowWord, wordPos,
             FuzzyScoreOptions(firstMatchCanBeWeak = false, boostFullMatch = true)
         )
         if (result != null) {
             return result
         }
-        patternPos++
+        patternPosMut++
     }
 
     return FuzzyScore(0, wordPos)

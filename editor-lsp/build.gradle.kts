@@ -1,7 +1,7 @@
-/*******************************************************************************
+  /*******************************************************************************
  *    sora-editor - the awesome code editor for Android
  *    https://github.com/Rosemoe/sora-editor
- *    Copyright (C) 2020-2023  Rosemoe
+ *    Copyright (C) 2020-2024  Rosemoe
  *
  *     This library is free software; you can redistribute it and/or
  *     modify it under the terms of the GNU Lesser General Public
@@ -23,7 +23,7 @@
  ******************************************************************************/
 plugins {
     id("com.android.library")
-    id("kotlin-android")
+    id("org.jetbrains.kotlin.android")
     id("com.vanniktech.maven.publish.base")
 }
 
@@ -43,12 +43,10 @@ android {
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
         }
     }
-    kotlinOptions {
-        jvmTarget = "11"
-    }
 }
 
 dependencies {
     compileOnly(projects.editor)
     implementation(libs.lsp4j)
+    implementation(libs.kotlinx.coroutines)
 }

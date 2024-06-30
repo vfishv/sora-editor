@@ -1,7 +1,7 @@
 /*
  *    sora-editor - the awesome code editor for Android
  *    https://github.com/Rosemoe/sora-editor
- *    Copyright (C) 2020-2023  Rosemoe
+ *    Copyright (C) 2020-2024  Rosemoe
  *
  *     This library is free software; you can redistribute it and/or
  *     modify it under the terms of the GNU Lesser General Public
@@ -282,6 +282,15 @@ public final class Cursor {
     @NonNull
     public CharPosition right() {
         return rightSel.fromThis();
+    }
+
+    /**
+     * Get current range of cursor. Modifications to the returned object does not affect cursor positions.
+     *
+     * @return {@link TextRange} object describing cursor positions
+     */
+    public TextRange getRange() {
+        return new TextRange(left(), right());
     }
 
     /**

@@ -1,7 +1,7 @@
 /*
  *    sora-editor - the awesome code editor for Android
  *    https://github.com/Rosemoe/sora-editor
- *    Copyright (C) 2020-2023  Rosemoe
+ *    Copyright (C) 2020-2024  Rosemoe
  *
  *     This library is free software; you can redistribute it and/or
  *     modify it under the terms of the GNU Lesser General Public
@@ -41,6 +41,7 @@ public class KeyMetaStates extends android.text.method.MetaKeyKeyListener {
      * Dummy text used for Android original APIs
      */
     private final Editable dest = Editable.Factory.getInstance().newEditable("");
+    private boolean isCtrlPressed = false;
 
     public KeyMetaStates(CodeEditor editor) {
         this.editor = editor;
@@ -48,10 +49,20 @@ public class KeyMetaStates extends android.text.method.MetaKeyKeyListener {
 
     public void onKeyDown(KeyEvent event) {
         super.onKeyDown(editor, dest, event.getKeyCode(), event);
+        isCtrlPressed = event.isCtrlPressed();
     }
 
     public void onKeyUp(KeyEvent event) {
         super.onKeyUp(editor, dest, event.getKeyCode(), event);
+        isCtrlPressed = event.isCtrlPressed();
+    }
+
+    public int getMetaState(KeyEvent event) {
+        return getMetaState(dest, event);
+    }
+
+    public boolean isCtrlPressed() {
+        return isCtrlPressed;
     }
 
     public boolean isShiftPressed() {
@@ -60,6 +71,10 @@ public class KeyMetaStates extends android.text.method.MetaKeyKeyListener {
 
     public boolean isAltPressed() {
         return getMetaState(dest, META_ALT_ON) != 0;
+    }
+
+    public boolean isSymPressed() {
+        return getMetaState(dest, META_SYM_ON) != 0;
     }
 
     public void adjust() {

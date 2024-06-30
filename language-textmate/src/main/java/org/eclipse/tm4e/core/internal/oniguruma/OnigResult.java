@@ -1,5 +1,5 @@
 /**
- *  Copyright (c) 2015-2017 Angelo ZERR.
+ * Copyright (c) 2015-2017 Angelo ZERR.
  * This program and the accompanying materials are made
  * available under the terms of the Eclipse Public License 2.0
  * which is available at https://www.eclipse.org/legal/epl-2.0/
@@ -11,8 +11,8 @@
  * Initial license: MIT
  *
  * Contributors:
- *  - GitHub Inc.: Initial code, written in JavaScript, licensed under MIT license
- *  - Angelo Zerr <angelo.zerr@gmail.com> - translation and adaptation to Java
+ * - GitHub Inc.: Initial code, written in JavaScript, licensed under MIT license
+ * - Angelo Zerr <angelo.zerr@gmail.com> - translation and adaptation to Java
  */
 package org.eclipse.tm4e.core.internal.oniguruma;
 
@@ -32,7 +32,7 @@ public final class OnigResult {
 		this.indexInScanner = indexInScanner;
 	}
 
-	int getIndex() {
+	public int getIndex() {
 		return indexInScanner;
 	}
 
@@ -40,17 +40,22 @@ public final class OnigResult {
 		indexInScanner = index;
 	}
 
-	int locationAt(final int index) {
+	public int locationAt(final int index) {
 		final int bytes = region.getBeg(index);
-		return Math.max(bytes, 0);
+		return bytes > 0 ? bytes : 0;
 	}
 
 	public int count() {
 		return region.getNumRegs();
 	}
 
-	int lengthAt(final int index) {
+	public int lengthAt(final int index) {
 		final int bytes = region.getEnd(index) - region.getBeg(index);
-		return Math.max(bytes, 0);
+		return bytes > 0 ? bytes : 0;
+	}
+
+	@Override
+	public String toString() {
+		return "OnigResult [indexInScanner=" + indexInScanner + ", region=" + region + "]";
 	}
 }

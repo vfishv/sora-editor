@@ -1,7 +1,7 @@
 /*
  *    sora-editor - the awesome code editor for Android
  *    https://github.com/Rosemoe/sora-editor
- *    Copyright (C) 2020-2023  Rosemoe
+ *    Copyright (C) 2020-2024  Rosemoe
  *
  *     This library is free software; you can redistribute it and/or
  *     modify it under the terms of the GNU Lesser General Public
@@ -147,7 +147,7 @@ public class ContentIO {
             text.runReadActionsOnLines(0, text.getLineCount() - 1, (Content.ContentLineConsumer2) (index, line, flag) -> {
                 try {
                     // Write line content
-                    buffered.write(line.value, 0, line.length());
+                    buffered.write(line.getBackingCharArray(), 0, line.length());
                     // Write line feed (the last line has empty line feed)
                     buffered.write(line.getLineSeparator().getChars());
                 } catch (IOException e) {

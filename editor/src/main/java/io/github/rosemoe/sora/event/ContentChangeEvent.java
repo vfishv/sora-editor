@@ -1,7 +1,7 @@
 /*
  *    sora-editor - the awesome code editor for Android
  *    https://github.com/Rosemoe/sora-editor
- *    Copyright (C) 2020-2023  Rosemoe
+ *    Copyright (C) 2020-2024  Rosemoe
  *
  *     This library is free software; you can redistribute it and/or
  *     modify it under the terms of the GNU Lesser General Public
@@ -55,17 +55,19 @@ public class ContentChangeEvent extends Event {
      */
     public final static int ACTION_DELETE = 3;
 
-    private final int mAction;
-    private final CharPosition mStart;
-    private final CharPosition mEnd;
-    private final CharSequence mTextChanged;
+    private final int action;
+    private final CharPosition start;
+    private final CharPosition end;
+    private final CharSequence textChanged;
+    private final boolean causedByUndoManager;
 
-    public ContentChangeEvent(@NonNull CodeEditor editor, int action, @NonNull CharPosition changeStart, @NonNull CharPosition changeEnd, @NonNull CharSequence textChanged) {
+    public ContentChangeEvent(@NonNull CodeEditor editor, int action, @NonNull CharPosition changeStart, @NonNull CharPosition changeEnd, @NonNull CharSequence textChanged, boolean causeByUndoManager) {
         super(editor);
-        mAction = action;
-        mStart = changeStart;
-        mEnd = changeEnd;
-        mTextChanged = textChanged;
+        this.action = action;
+        start = changeStart;
+        end = changeEnd;
+        this.textChanged = textChanged;
+        causedByUndoManager = causeByUndoManager;
     }
 
     /**
@@ -76,7 +78,7 @@ public class ContentChangeEvent extends Event {
      * @see #ACTION_DELETE
      */
     public int getAction() {
-        return mAction;
+        return action;
     }
 
     /**
@@ -86,7 +88,7 @@ public class ContentChangeEvent extends Event {
      */
     @NonNull
     public CharPosition getChangeStart() {
-        return mStart;
+        return start;
     }
 
     /**
@@ -96,18 +98,24 @@ public class ContentChangeEvent extends Event {
      */
     @NonNull
     public CharPosition getChangeEnd() {
-        return mEnd;
+        return end;
     }
 
     /**
      * Return the changed text in this modification.
      * If action is {@link #ACTION_SET_NEW_TEXT}, Content instance is returned.
-     * If action is {@link #ACTION_INSERT}, inserted text is the result.
-     * If action is {@link #ACTION_DELETE}, deleted text is the result.
+     * If action is {@link #ACTION_INSERT}, inserted text is returned.
+     * If action is {@link #ACTION_DELETE}, deleted text is returned.
      */
     @NonNull
     public CharSequence getChangedText() {
-        return mTextChanged;
+        return textChanged;
     }
 
+    /**
+     * If the content change is caused by undo/redo
+     */
+    public boolean isCausedByUndoManager() {
+        return causedByUndoManager;
+    }
 }

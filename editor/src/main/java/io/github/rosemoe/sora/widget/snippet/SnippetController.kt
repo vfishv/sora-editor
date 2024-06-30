@@ -1,7 +1,7 @@
 /*******************************************************************************
  *    sora-editor - the awesome code editor for Android
  *    https://github.com/Rosemoe/sora-editor
- *    Copyright (C) 2020-2023  Rosemoe
+ *    Copyright (C) 2020-2024  Rosemoe
  *
  *     This library is free software; you can redistribute it and/or
  *     modify it under the terms of the GNU Lesser General Public
@@ -326,8 +326,9 @@ class SnippetController(private val editor: CodeEditor) {
         val line = text.getLine(pos.line)
         var indentEnd = 0
         for (i in 0 until pos.column) {
-            if (line.value[i] == ' ' || line.value[i] == '\t') {
-                indentEnd++;
+            val char = line[i]
+            if (char == ' ' || char == '\t') {
+                indentEnd++
             } else {
                 break
             }
@@ -492,7 +493,6 @@ class SnippetController(private val editor: CodeEditor) {
         if (snippetIndex == -1) {
             return
         }
-        editor.hideAutoCompleteWindow()
         if (index != currentTabStopIndex && currentTabStopIndex != -1) {
             // apply transform
             val tabStop = tabStops!![currentTabStopIndex]

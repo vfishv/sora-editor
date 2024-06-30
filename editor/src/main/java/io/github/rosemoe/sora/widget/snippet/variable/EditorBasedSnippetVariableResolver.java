@@ -1,7 +1,7 @@
 /*
  *    sora-editor - the awesome code editor for Android
  *    https://github.com/Rosemoe/sora-editor
- *    Copyright (C) 2020-2023  Rosemoe
+ *    Copyright (C) 2020-2024  Rosemoe
  *
  *     This library is free software; you can redistribute it and/or
  *     modify it under the terms of the GNU Lesser General Public
@@ -61,7 +61,7 @@ public class EditorBasedSnippetVariableResolver implements ISnippetVariableResol
                 return Integer.toString(editor.getCursor().getLeft() + 1);
             case "TM_CURRENT_WORD": {
                 var text = editor.getText();
-                var res = ICUUtils.getWordEdges(text.getLine(text.getCursor().getLeftLine()), text.getCursor().getLeftColumn(), true);
+                var res = ICUUtils.getWordRange(text.getLine(text.getCursor().getLeftLine()), text.getCursor().getLeftColumn(), true);
                 return text.getLine(text.getCursor().getLeftLine()).subSequence(IntPair.getFirst(res), IntPair.getSecond(res)).toString();
             }
             case "SELECTION":

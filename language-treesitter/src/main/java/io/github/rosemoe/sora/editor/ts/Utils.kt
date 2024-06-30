@@ -1,7 +1,7 @@
 /*******************************************************************************
  *    sora-editor - the awesome code editor for Android
  *    https://github.com/Rosemoe/sora-editor
- *    Copyright (C) 2020-2023  Rosemoe
+ *    Copyright (C) 2020-2024  Rosemoe
  *
  *     This library is free software; you can redistribute it and/or
  *     modify it under the terms of the GNU Lesser General Public
@@ -24,6 +24,7 @@
 
 package io.github.rosemoe.sora.editor.ts
 
+import com.itsaky.androidide.treesitter.TSInputEdit
 import com.itsaky.androidide.treesitter.TSPoint
 import com.itsaky.androidide.treesitter.TSQuery
 import com.itsaky.androidide.treesitter.TSQueryError
@@ -32,10 +33,23 @@ import io.github.rosemoe.sora.text.CharPosition
 /**
  * Convert a [CharPosition] object to a [TSPoint] object
  */
-fun CharPosition.toTSPoint() = TSPoint(line, column * 2)
+fun CharPosition.toTSPoint(): TSPoint = TSPoint.create(line, column * 2)
 
 fun TSQuery.validateOrThrow(name: String = "unknown") {
     if (errorType != TSQueryError.None) {
         throw IllegalArgumentException("query(name:$name) parsing failed: ${errorType.name} at text offset $errorOffset")
     }
 }
+
+/**
+ * Create a new [TSInputEdit] object for the given positions
+ */
+fun newTSInputEdit(start: CharPosition, oldEnd: CharPosition, newEnd: CharPosition) =
+    TSInputEdit.create(
+        start.index * 2,
+        oldEnd.index * 2,
+        newEnd.index * 2,
+        start.toTSPoint(),
+        oldEnd.toTSPoint(),
+        newEnd.toTSPoint()
+    )

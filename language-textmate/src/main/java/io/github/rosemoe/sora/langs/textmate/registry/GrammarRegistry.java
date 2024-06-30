@@ -1,7 +1,7 @@
 /*
  *    sora-editor - the awesome code editor for Android
  *    https://github.com/Rosemoe/sora-editor
- *    Copyright (C) 2020-2023  Rosemoe
+ *    Copyright (C) 2020-2024  Rosemoe
  *
  *     This library is free software; you can redistribute it and/or
  *     modify it under the terms of the GNU Lesser General Public
@@ -30,7 +30,7 @@ import org.eclipse.tm4e.core.grammar.IGrammar;
 import org.eclipse.tm4e.core.registry.IGrammarSource;
 import org.eclipse.tm4e.core.registry.IThemeSource;
 import org.eclipse.tm4e.core.registry.Registry;
-import org.eclipse.tm4e.languageconfiguration.model.LanguageConfiguration;
+import org.eclipse.tm4e.languageconfiguration.internal.model.LanguageConfiguration;
 
 import java.io.InputStreamReader;
 import java.io.Reader;
@@ -52,8 +52,6 @@ public class GrammarRegistry {
     private static GrammarRegistry instance;
 
     private Registry registry = new Registry();
-
-
 
     private GrammarRegistry parent;
 
@@ -212,7 +210,6 @@ public class GrammarRegistry {
 
             if (languageConfigurationStream != null) {
 
-
                 var languageConfiguration = LanguageConfiguration.load(
                         new InputStreamReader(languageConfigurationStream)
                 );
@@ -254,7 +251,7 @@ public class GrammarRegistry {
 
     public synchronized void setTheme(ThemeModel themeModel) throws Exception {
         if (!themeModel.isLoaded()) {
-            themeModel.load();
+            themeModel.load(registry.getColorMap());
         }
         registry.setTheme(themeModel.getTheme());
     }
