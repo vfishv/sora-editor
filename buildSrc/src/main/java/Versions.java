@@ -32,7 +32,7 @@ public final class Versions {
     public final static String buildToolsVersion = "35.0.0";
     public final static int compileSdkVersion = 35;
     public final static int minSdkVersion = 21;
-    public final static int targetSdkVersion = 31;
+    public final static int targetSdkVersion = 34;
 
     // Dependency versions
     public final static String antlrVersion = "4.9.2";
