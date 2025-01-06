@@ -62,7 +62,7 @@ fun Project.configureBaseExtension() {
 
 fun Project.configureKotlinExtension() {
     extensions.findByType(KotlinAndroidProjectExtension::class)?.run {
-        jvmToolchain(17)
+        jvmToolchain(21)
     }
 }
 
